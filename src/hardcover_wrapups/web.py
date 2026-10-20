@@ -43,6 +43,7 @@ STYLE_CHOICES = [
     ("calendar", "Calendar", "Covers on the days you read them"),
 ]
 DEFAULT_STYLE = "grid"
+DEFAULT_COLUMNS = 4
 MAX_COLUMNS = 8
 MAX_NAME_LENGTH = 40
 
@@ -239,7 +240,7 @@ def create_app(settings, transport=None, today=date.today):
     def form_page(request, session, options, status=200, **context):
         return page(request, "wrapup.html", status=status, session=session, options=options,
                     styles=STYLE_CHOICES, months=list(enumerate(calendar.month_name))[1:],
-                    this_year=today().year, max_columns=MAX_COLUMNS,
+                    this_year=today().year, default_columns=DEFAULT_COLUMNS, max_columns=MAX_COLUMNS,
                     max_name_length=MAX_NAME_LENGTH, **context)
 
     async def index(request):

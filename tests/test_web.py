@@ -188,6 +188,7 @@ def test_form_defaults_to_last_month(client):
     assert '<option value="9" selected>' in page.text
     assert 'value="2026"' in page.text
     assert "Signed in as sam" in page.text
+    assert 'name="columns" value="4"' in page.text
 
 
 def test_render_returns_the_image(client, hardcover):

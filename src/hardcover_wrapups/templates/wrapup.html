@@ -54,8 +54,8 @@
     <label>Title prefix <small>(optional, e.g. “Sam's” makes “Sam's {{ options.month_label }} Reads”)</small>
       <input type="text" name="name" value="{{ options.name }}" maxlength="{{ max_name_length }}" autocomplete="off">
     </label>
-    <label>Books per row <small>(optional; grid, shelf and cork)</small>
-      <input type="number" name="columns" value="{{ options.columns or '' }}" min="1" max="{{ max_columns }}" placeholder="4">
+    <label>Books per row <small>(grid, shelf and cork)</small>
+      <input type="number" name="columns" value="{{ options.columns or default_columns }}" min="1" max="{{ max_columns }}">
     </label>
     <label class="check">
       <input type="checkbox" name="include_followers" {% if options.include_followers %}checked{% endif %}>
