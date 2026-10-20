@@ -250,6 +250,7 @@ def test_security_headers(client):
     resp = client.get("/")
     assert "frame-ancestors 'none'" in resp.headers["content-security-policy"]
     assert resp.headers["referrer-policy"] == "no-referrer"
+    assert resp.headers["strict-transport-security"] == "max-age=31536000"
     assert resp.headers["cache-control"] == "no-store"
 
 
@@ -329,3 +330,12 @@ def test_favicon_is_served(client):
     assert resp.headers["content-type"] == "image/x-icon"
     assert "max-age" in resp.headers["cache-control"]
     assert 'rel="apple-touch-icon"' in client.get("/").text
+
+
+def test_pages_link_assets_with_relative_paths(client):
+    # Fly terminates HTTPS and forwards plain HTTP, so absolute URLs built from the
+    # request would say http:// and the browser would block them on the https page.
+    sign_in(client)
+    for page in (client.get("/"), client.get("/wrapup")):
+        assert "http://testserver" not in page.text
+        assert 'href="/static/style.css"' in page.text

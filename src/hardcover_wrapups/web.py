@@ -80,6 +80,8 @@ SECURITY_HEADERS = {
                                "script-src 'self'; form-action 'self'; frame-ancestors 'none'; "
                                "base-uri 'none'",
     "referrer-policy": "no-referrer",
+    # Browsers only honour this over HTTPS, so it's harmless on a local http:// run.
+    "strict-transport-security": "max-age=31536000",
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
 }
