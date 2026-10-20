@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Local config and secrets
+.env
+.env.*
+
+# Rendered wrap-ups
+wrapup-*.png
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
