@@ -11,14 +11,19 @@ Usage:
     uv run hc-wrapup 8 2026 --style calendar  # covers on the day you finished them
     uv run hc-wrapup 8 2026 --style rainbow   # sorted by cover colour
     uv run hc-wrapup 8 2026 --style eight     # covers arranged in a figure 8
+    uv run hc-wrapup 8 2026 --privacy public  # leave out followers-only and private books
     uv run hc-wrapup 8 2026 --debug           # print what the API returned
 """
 import argparse
+import asyncio
 import calendar
+import logging
 import os
 import sys
 
 from . import api, render
+
+PRIVACY_LEVELS = {"public": api.PUBLIC, "followers": api.FOLLOWERS_ONLY, "private": api.PRIVATE}
 
 
 def parse_month(text):
@@ -37,38 +42,51 @@ def main():
     p = argparse.ArgumentParser(description="Monthly cover-collage wrap-up from Hardcover.")
     p.add_argument("month", help="1-12 or a month name")
     p.add_argument("year", type=int)
-    p.add_argument("--style", choices=render.STYLES, default="grid",
+    p.add_argument("--style", choices=render.STYLES, default=render.DEFAULT_STYLE,
                    help="grid (default), shelf, cork, calendar (by finish date), "
                         "rainbow (sorted by cover colour) or eight (figure-8 ring layout)")
     p.add_argument("--columns", type=int, default=None,
-                   help="books per row for grid/shelf/cork/rainbow (default 4)")
+                   help=f"books per row for grid/shelf/cork/rainbow (default 4, max {render.MAX_COLUMNS})")
     p.add_argument("--seed", type=int, default=0,
                    help="changes the random tilt/placement for shelf and cork")
     p.add_argument("--name", help="prefix for the title, e.g. \"Sam's\"")
+    p.add_argument("--privacy", choices=PRIVACY_LEVELS, default="private",
+                   help="most private library entries to include: public, followers "
+                        "or private (default: private, i.e. everything)")
     p.add_argument("-o", "--output", help="output PNG path")
     p.add_argument("--debug", action="store_true", help="print the raw API response")
     args = p.parse_args()
+    logging.basicConfig(format="  (%(message)s)", level=logging.WARNING)
 
     token = os.environ.get("HARDCOVER_TOKEN")
     if not token:
         sys.exit("Set the HARDCOVER_TOKEN environment variable first.")
 
     month = parse_month(args.month)
-    books, _username = api.fetch_month(token, args.year, month, args.debug)
+    try:
+        books = asyncio.run(fetch_books(token, args.year, month,
+                                        PRIVACY_LEVELS[args.privacy], args.debug))
+    except api.HardcoverError as e:
+        sys.exit(str(e))
     if not books:
         sys.exit(f"No finished reads found for {calendar.month_name[month]} {args.year}.")
 
-    print(f"Found {len(books)} book(s); downloading covers...")
-    for b in books:
-        b["image"] = render.open_cover(api.download(b["url"])) if b["url"] else None
-
-    title = f"{calendar.month_name[month]} {args.year} Reads"
-    if args.name:
-        title = f"{args.name} {title}"
+    title = render.make_title(args.year, month, args.name)
     out = args.output or f"wrapup-{args.year}-{month:02d}-{args.style}.png"
     render.render_style(args.style, books, title, out, args.year, month,
                         columns=args.columns, seed=args.seed)
     print(f"Saved {out}")
+
+
+async def fetch_books(token, year, month, max_privacy, debug):
+    async with api.new_client() as client:
+        books, _username = await api.fetch_month(client, token, year, month, max_privacy, debug)
+        if books:
+            print(f"Found {len(books)} book(s); downloading covers...")
+        covers = await api.download_covers(client, [b["url"] for b in books])
+    for b, data in zip(books, covers):
+        b["image"] = render.open_cover(data)
+    return books
 
 
 if __name__ == "__main__":

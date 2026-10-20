@@ -4,13 +4,20 @@ Book dicts have 'title', 'authors', 'finished', 'started' (from api.fetch_month)
 'image' (a PIL.Image, or None to draw a placeholder tile).
 """
 import calendar
+import functools
 import io
-import os
 from datetime import date
+from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 STYLES = ["grid", "shelf", "cork", "calendar", "rainbow", "eight"]
+DEFAULT_STYLE = "grid"
+MAX_COLUMNS = 8
+MAX_NAME_LENGTH = 40
+
+# Covers are never drawn larger than about 300x600, so shrink them on load to save memory.
+COVER_MAX_SIZE = (800, 1000)
 
 
 def open_cover(data):
@@ -18,33 +25,31 @@ def open_cover(data):
     if not data:
         return None
     try:
-        return Image.open(io.BytesIO(data)).convert("RGB")
+        img = Image.open(io.BytesIO(data))
+        img.draft("RGB", COVER_MAX_SIZE)  # lets JPEGs decode at reduced size
+        img = img.convert("RGB")
+        img.thumbnail(COVER_MAX_SIZE, Image.LANCZOS)
+        return img
     except Exception:  # noqa: BLE001 - an undecodable cover just gets a placeholder
         return None
 
 
+def make_title(year, month, name=None):
+    """'August 2026 Reads', or "Sam's August 2026 Reads" with a (trimmed) name."""
+    title = f"{calendar.month_name[month]} {year} Reads"
+    name = " ".join((name or "").split())[:MAX_NAME_LENGTH]
+    return f"{name} {title}" if name else title
+
+
 # ------------------------------------------------------------ Drawing ----
 
-FONT_CANDIDATES = [
-    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",   # macOS
-    "/System/Library/Fonts/Helvetica.ttc",
-    "/Library/Fonts/Arial Bold.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux
-    "C:/Windows/Fonts/arialbd.ttf",                          # Windows
-]
+# Bundled so images look the same on every machine; see fonts/DejaVu-LICENSE.
+FONT_PATH = Path(__file__).parent / "fonts" / "DejaVuSans-Bold.ttf"
 
 
+@functools.cache
 def load_font(size):
-    for path in FONT_CANDIDATES:
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, size)
-            except OSError:
-                pass
-    try:
-        return ImageFont.load_default(size)
-    except TypeError:  # very old Pillow
-        return ImageFont.load_default()
+    return ImageFont.truetype(FONT_PATH, size)
 
 
 def wrap(draw, text, font, max_width):
@@ -539,6 +544,8 @@ def render_eight(books, title, out_path, seed=0):
 
 def render_style(style, books, title, out, year, month, columns=None, seed=0):
     """Render `books` in the named style to `out` (a path or a writable binary file)."""
+    if columns is not None:
+        columns = max(1, min(columns, MAX_COLUMNS))
     cols = columns or 4
     if style == "shelf":
         render_shelf(books, title, out, per_row=cols, seed=seed)

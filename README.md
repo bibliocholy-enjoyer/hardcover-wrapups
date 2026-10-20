@@ -12,12 +12,16 @@ Styles: `grid` (default), `shelf`, `cork`, `calendar`, `rainbow` and `eight`.
 ## Command-line use
 
 You need [uv](https://docs.astral.sh/uv/) and a personal API token from
-hardcover.app → Account → API Access.
+hardcover.app → Account → API Access. Put it in a `.env` file (git ignores it):
+
+```
+HARDCOVER_TOKEN=...
+```
 
 ```bash
-export HARDCOVER_TOKEN="..."
-uv run hc-wrapup august 2026
-uv run hc-wrapup 8 2026 --style shelf --columns 5 --name "Sam's"
+uv run --env-file .env hc-wrapup august 2026
+uv run --env-file .env hc-wrapup 8 2026 --style shelf --columns 5 --name "Sam's"
+uv run --env-file .env hc-wrapup 8 2026 --privacy public   # only public library entries
 uv run hc-wrapup --help
 ```
 
@@ -38,5 +42,6 @@ to draw the image and stores nothing.
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Book data and covers come from Hardcover and are used
+MIT. See [LICENSE](LICENSE). The bundled DejaVu Sans Bold font has its own permissive
+license in [src/hardcover_wrapups/fonts/DejaVu-LICENSE](src/hardcover_wrapups/fonts/DejaVu-LICENSE). Book data and covers come from Hardcover and are used
 under [Hardcover's API terms](https://docs.hardcover.app/api/).
