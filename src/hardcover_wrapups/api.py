@@ -1,11 +1,19 @@
 """Hardcover GraphQL queries: who the user is, and which books they finished in a month."""
+import asyncio
 import json
-import sys
-import urllib.error
-import urllib.request
+import logging
 from datetime import date
+from urllib.parse import urlsplit
+
+import httpx
+
+log = logging.getLogger(__name__)
 
 API_URL = "https://api.hardcover.app/v1/graphql"
+USER_AGENT = "hardcover-wrapups/0.1 (+https://github.com/bibliocholy-enjoyer/hardcover-wrapups)"
+
+# Hardcover's privacy_settings table: each library entry has one of these.
+PUBLIC, FOLLOWERS_ONLY, PRIVATE = 1, 2, 3
 
 # Ways Hardcover might expose the cover image; we try each until one is accepted.
 IMAGE_FIELDS = ["image { url }", "cached_image"]
@@ -13,9 +21,10 @@ IMAGE_FIELDS = ["image { url }", "cached_image"]
 ME_QUERY = "query { me { id username } }"
 
 BOOKS_QUERY = """
-query ($uid: Int!, $start: date!, $end: date!) {
+query ($uid: Int!, $start: date!, $end: date!, $max_privacy: Int!) {
   user_books(where: {
     user_id: {_eq: $uid},
+    privacy_setting_id: {_lte: $max_privacy},
     user_book_reads: {finished_at: {_gte: $start, _lt: $end}}
   }) {
     user_book_reads(
@@ -31,25 +40,39 @@ query ($uid: Int!, $start: date!, $end: date!) {
 }
 """
 
+COVER_CONCURRENCY = 8
+COVER_MAX_BYTES = 10 * 1024 * 1024
+COVER_TIMEOUT = 15
 
-def gql(token, query, variables=None):
+
+class HardcoverError(Exception):
+    """Hardcover returned an error, or couldn't be reached."""
+
+
+class AuthError(HardcoverError):
+    """The token is missing, invalid or expired: the user needs to sign in again."""
+
+
+def new_client(**kwargs):
+    """An HTTP client with our User-Agent; use one per request (or per CLI run)."""
+    return httpx.AsyncClient(headers={"User-Agent": USER_AGENT}, timeout=30, **kwargs)
+
+
+async def gql(client, token, query, variables=None):
     auth = token if token.lower().startswith("bearer ") else f"Bearer {token}"
-    req = urllib.request.Request(
-        API_URL,
-        data=json.dumps({"query": query, "variables": variables or {}}).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "authorization": auth,
-            "User-Agent": "hc-wrapup-script/0.1",
-        },
-    )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.load(resp)
-    except urllib.error.HTTPError as e:
-        sys.exit(f"HTTP {e.code} from Hardcover: {e.read().decode(errors='replace')}")
-    except urllib.error.URLError as e:
-        sys.exit(f"Network error: {e.reason}")
+        resp = await client.post(
+            API_URL,
+            json={"query": query, "variables": variables or {}},
+            headers={"authorization": auth},
+        )
+    except httpx.HTTPError as e:
+        raise HardcoverError(f"Couldn't reach Hardcover: {e}") from e
+    if resp.status_code == 401:
+        raise AuthError("Hardcover didn't accept the token; sign in again.")
+    if resp.status_code != 200:
+        raise HardcoverError(f"HTTP {resp.status_code} from Hardcover: {resp.text[:500]}")
+    return resp.json()
 
 
 def first(x):
@@ -70,18 +93,26 @@ def cover_url(book):
     return None
 
 
-def fetch_month(token, year, month, debug=False):
-    me = gql(token, ME_QUERY)
+async def fetch_month(client, token, year, month, max_privacy=PRIVATE, debug=False):
+    """Books finished in the month, oldest first, and the user's username.
+
+    max_privacy leaves out entries more private than it: PUBLIC keeps only public
+    entries, FOLLOWERS_ONLY adds followers-only ones, PRIVATE keeps everything.
+    """
+    me = await gql(client, token, ME_QUERY)
     if me.get("errors"):
-        sys.exit(f"Could not identify you: {json.dumps(me['errors'], indent=2)}")
+        raise HardcoverError(f"Could not identify you: {json.dumps(me['errors'])}")
     me = first(me["data"]["me"])
+    if not me:
+        raise AuthError("Hardcover didn't return a user for this token; sign in again.")
     start = date(year, month, 1)
     end = date(year + (month == 12), month % 12 + 1, 1)
-    variables = {"uid": me["id"], "start": start.isoformat(), "end": end.isoformat()}
+    variables = {"uid": me["id"], "start": start.isoformat(), "end": end.isoformat(),
+                 "max_privacy": max_privacy}
 
     last_errors = None
     for image_field in IMAGE_FIELDS:
-        resp = gql(token, BOOKS_QUERY.replace("%IMAGE%", image_field), variables)
+        resp = await gql(client, token, BOOKS_QUERY.replace("%IMAGE%", image_field), variables)
         if resp.get("errors"):
             last_errors = resp["errors"]
             continue
@@ -106,15 +137,30 @@ def fetch_month(token, year, month, debug=False):
             })
         books.sort(key=lambda b: b["finished"])
         return books, me.get("username")
-    sys.exit(f"The books query failed:\n{json.dumps(last_errors, indent=2)}")
+    raise HardcoverError(f"The books query failed: {json.dumps(last_errors)}")
 
 
-def download(url):
+async def download(client, url, semaphore):
     """Fetch a cover image's bytes, or None on any failure (a placeholder is drawn instead)."""
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "hc-wrapup-script/0.1"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return resp.read()
-    except Exception as e:  # noqa: BLE001 - any failure just means "use a placeholder"
-        print(f"  (could not load cover {url}: {e})", file=sys.stderr)
+    if not url or urlsplit(url).scheme != "https":
         return None
+    async with semaphore:
+        try:
+            async with client.stream("GET", url, timeout=COVER_TIMEOUT) as resp:
+                resp.raise_for_status()
+                data = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    data += chunk
+                    if len(data) > COVER_MAX_BYTES:
+                        log.warning("cover too large, skipping: %s", url)
+                        return None
+                return bytes(data)
+        except httpx.HTTPError as e:
+            log.warning("could not load cover %s: %s", url, e)
+            return None
+
+
+async def download_covers(client, urls):
+    """Download covers in parallel; returns bytes (or None) for each URL, in order."""
+    semaphore = asyncio.Semaphore(COVER_CONCURRENCY)
+    return await asyncio.gather(*(download(client, u, semaphore) for u in urls))

@@ -12,12 +12,16 @@ Styles: `grid` (default), `shelf`, `cork`, `calendar`, `rainbow` and `eight`.
 ## Command-line use
 
 You need [uv](https://docs.astral.sh/uv/) and a personal API token from
-hardcover.app → Account → API Access.
+hardcover.app → Account → API Access. Put it in a `.env` file (git ignores it):
+
+```
+HARDCOVER_TOKEN=...
+```
 
 ```bash
-export HARDCOVER_TOKEN="..."
-uv run hc-wrapup august 2026
-uv run hc-wrapup 8 2026 --style shelf --columns 5 --name "Sam's"
+uv run --env-file .env hc-wrapup august 2026
+uv run --env-file .env hc-wrapup 8 2026 --style shelf --columns 5 --name "Sam's"
+uv run --env-file .env hc-wrapup 8 2026 --privacy public   # only public library entries
 uv run hc-wrapup --help
 ```
 
