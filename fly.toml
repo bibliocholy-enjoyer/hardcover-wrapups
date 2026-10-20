@@ -1,6 +1,6 @@
 # Fly.io configuration: https://fly.io/docs/reference/configuration/
 app = "hardcover-wrapups"
-primary_region = "REGION"  # pick the closest region: `fly platform regions`
+primary_region = "iad"  # next to Hardcover's API (DigitalOcean, New York area)
 
 [build]
   dockerfile = "Dockerfile"
