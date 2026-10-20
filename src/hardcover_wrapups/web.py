@@ -367,6 +367,12 @@ def create_app(settings, transport=None, today=date.today):
                                                  session["token"], "access_token")
         return response
 
+    async def privacy(request):
+        return page(request, "privacy.html", session=get_session(request))
+
+    async def terms(request):
+        return page(request, "terms.html", session=get_session(request))
+
     async def healthz(request):
         return PlainTextResponse("ok")
 
@@ -382,6 +388,8 @@ def create_app(settings, transport=None, today=date.today):
             Route("/wrapup", wrapup),
             Route("/wrapup", make_wrapup, methods=["POST"]),
             Route("/logout", logout, methods=["POST"]),
+            Route("/privacy", privacy),
+            Route("/terms", terms),
             Route("/healthz", healthz),
             Route("/favicon.ico", favicon),
             Mount("/static", StaticFiles(directory=HERE / "static"), name="static"),

@@ -339,3 +339,17 @@ def test_pages_link_assets_with_relative_paths(client):
     for page in (client.get("/"), client.get("/wrapup")):
         assert "http://testserver" not in page.text
         assert 'href="/static/style.css"' in page.text
+
+
+@pytest.mark.parametrize("path, heading", [("/privacy", "Privacy policy"), ("/terms", "Terms of use")])
+def test_policy_pages(client, path, heading):
+    resp = client.get(path)
+    assert resp.status_code == 200
+    assert f"<h1>{heading}</h1>" in resp.text
+    assert 'href="/privacy"' in client.get("/").text
+
+
+def test_landing_page_shows_sample(client):
+    page = client.get("/")
+    assert 'src="/static/sample.jpg"' in page.text
+    assert client.get("/static/sample.jpg").status_code == 200
