@@ -9,8 +9,6 @@ Usage:
     uv run hc-wrapup 8 2026 --style shelf     # bookshelf
     uv run hc-wrapup 8 2026 --style cork      # corkboard
     uv run hc-wrapup 8 2026 --style calendar  # covers on the day you finished them
-    uv run hc-wrapup 8 2026 --style rainbow   # sorted by cover colour
-    uv run hc-wrapup 8 2026 --style eight     # covers arranged in a figure 8
     uv run hc-wrapup 8 2026 --privacy public  # leave out followers-only and private books
     uv run hc-wrapup 8 2026 --debug           # print what the API returned
 """
@@ -43,10 +41,9 @@ def main():
     p.add_argument("month", help="1-12 or a month name")
     p.add_argument("year", type=int)
     p.add_argument("--style", choices=render.STYLES, default=render.DEFAULT_STYLE,
-                   help="grid (default), shelf, cork, calendar (by finish date), "
-                        "rainbow (sorted by cover colour) or eight (figure-8 ring layout)")
+                   help="grid (default), shelf, cork or calendar (by finish date)")
     p.add_argument("--columns", type=int, default=None,
-                   help=f"books per row for grid/shelf/cork/rainbow (default 4, max {render.MAX_COLUMNS})")
+                   help=f"books per row for grid/shelf/cork (default 4, max {render.MAX_COLUMNS})")
     p.add_argument("--seed", type=int, default=0,
                    help="changes the random tilt/placement for shelf and cork")
     p.add_argument("--name", help="prefix for the title, e.g. \"Sam's\"")
