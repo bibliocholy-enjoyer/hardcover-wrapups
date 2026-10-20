@@ -6,6 +6,8 @@ Setup:
 Usage:
     uv run hc-wrapup 8 2026
     uv run hc-wrapup august 2026 --columns 5 --name "Sam's"
+    uv run hc-wrapup 8 2026 --style seasonal  # grid with a border for the month's season
+    uv run hc-wrapup 8 2026 --style seasonal --theme winter
     uv run hc-wrapup 8 2026 --style shelf     # bookshelf
     uv run hc-wrapup 8 2026 --style cork      # corkboard
     uv run hc-wrapup 8 2026 --style calendar  # covers on the day you finished them
@@ -19,7 +21,7 @@ import logging
 import os
 import sys
 
-from . import api, render
+from . import api, render, seasonal
 
 PRIVACY_LEVELS = {"public": api.PUBLIC, "followers": api.FOLLOWERS_ONLY, "private": api.PRIVATE}
 
@@ -41,9 +43,11 @@ def main():
     p.add_argument("month", help="1-12 or a month name")
     p.add_argument("year", type=int)
     p.add_argument("--style", choices=render.STYLES, default=render.DEFAULT_STYLE,
-                   help="grid (default), shelf, cork or calendar (by finish date)")
+                   help="grid (default), seasonal, shelf, cork or calendar (by finish date)")
+    p.add_argument("--theme", choices=seasonal.THEME_NAMES,
+                   help="season for the seasonal style (default: the month's season)")
     p.add_argument("--columns", type=int, default=None,
-                   help=f"books per row for grid/shelf/cork (default 4, max {render.MAX_COLUMNS})")
+                   help=f"books per row for grid/seasonal/shelf/cork (default 4, max {render.MAX_COLUMNS})")
     p.add_argument("--seed", type=int, default=0,
                    help="changes the random tilt/placement for shelf and cork")
     p.add_argument("--name", help="prefix for the title, e.g. \"Sam's\"")
@@ -71,7 +75,7 @@ def main():
     title = render.make_title(args.year, month, args.name)
     out = args.output or f"wrapup-{args.year}-{month:02d}-{args.style}.png"
     render.render_style(args.style, books, title, out, args.year, month,
-                        columns=args.columns, seed=args.seed)
+                        columns=args.columns, seed=args.seed, theme=args.theme)
     print(f"Saved {out}")
 
 

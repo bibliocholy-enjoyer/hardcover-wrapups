@@ -47,6 +47,13 @@
       </label>
       {% endfor %}
     </div>
+    <label class="season">Season <small>(seasonal style)</small>
+      <select name="theme">
+        {% for key, label in themes %}
+        <option value="{{ key }}" {% if key == options.theme %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
   </fieldset>
 
   <fieldset>
@@ -54,7 +61,7 @@
     <label>Title prefix <small>(optional, e.g. “Sam's” makes “Sam's {{ options.month_label }} Reads”)</small>
       <input type="text" name="name" value="{{ options.name }}" maxlength="{{ max_name_length }}" autocomplete="off">
     </label>
-    <label>Books per row <small>(grid, shelf and cork)</small>
+    <label>Books per row <small>(grid, seasonal, shelf and cork)</small>
       <input type="number" name="columns" value="{{ options.columns or default_columns }}" min="1" max="{{ max_columns }}">
     </label>
     <label class="check">

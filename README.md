@@ -7,7 +7,8 @@ The goal is a public web app at `https://hardcover-wrapups.fly.dev` where you si
 with Hardcover, pick a month and a style, and download the image. It isn't live yet;
 for now there's a command-line tool.
 
-Styles: `grid` (default), `shelf`, `cork` and `calendar`.
+Styles: `grid` (default), `seasonal` (the grid with an autumn, winter, spring or summer
+border, all drawn in code), `shelf`, `cork` and `calendar`.
 
 ## Command-line use
 

@@ -147,6 +147,8 @@ h2 { font-size: 1.3rem; margin: 2rem 0 0.75rem; }
 .options .style span { display: flex; flex-direction: column; }
 .options .style input { margin-top: 0.35rem; }
 
+.options .season { margin-top: 0.9rem; }
+
 .options .check { display: flex; gap: 0.5rem; align-items: center; }
 
 .busy { color: var(--muted); min-height: 1.5em; }

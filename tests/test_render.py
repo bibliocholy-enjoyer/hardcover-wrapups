@@ -3,7 +3,7 @@ import io
 import pytest
 from PIL import Image
 
-from hardcover_wrapups import render
+from hardcover_wrapups import render, seasonal
 
 BOOKS = [
     {"title": "A Book With a Fairly Long Title", "authors": ["Some Author"],
@@ -54,3 +54,27 @@ def test_columns_are_clamped():
 
 def test_uses_bundled_font():
     assert str(render.load_font(20).path) == str(render.FONT_PATH)
+
+
+@pytest.mark.parametrize("theme", seasonal.THEME_NAMES)
+def test_every_seasonal_theme_renders(theme):
+    out = io.BytesIO()
+    render.render_style("seasonal", [dict(b) for b in BOOKS], "T", out, 2026, 8, theme=theme)
+    assert Image.open(io.BytesIO(out.getvalue())).format == "PNG"
+
+
+@pytest.mark.parametrize("month, theme", [
+    (12, "winter"), (1, "winter"), (2, "winter"), (3, "spring"), (5, "spring"),
+    (6, "summer"), (8, "summer"), (9, "autumn"), (11, "autumn"),
+])
+def test_theme_for_month(month, theme):
+    assert seasonal.theme_for_month(month) == theme
+
+
+def test_seasonal_is_deterministic():
+    outs = []
+    for _ in range(2):
+        out = io.BytesIO()
+        render.render_style("seasonal", [dict(b) for b in BOOKS], "T", out, 2026, 10)
+        outs.append(out.getvalue())
+    assert outs[0] == outs[1]
