@@ -7,7 +7,7 @@ The goal is a public web app at `https://hardcover-wrapups.fly.dev` where you si
 with Hardcover, pick a month and a style, and download the image. It isn't live yet;
 for now there's a command-line tool.
 
-Styles: `grid` (default), `shelf`, `cork`, `calendar`, `rainbow` and `eight`.
+Styles: `grid` (default), `shelf`, `cork` and `calendar`.
 
 ## Command-line use
 
@@ -25,6 +25,24 @@ uv run --env-file .env hc-wrapup 8 2026 --privacy public   # only public library
 uv run hc-wrapup --help
 ```
 
+## Running the web app locally
+
+Register a Hardcover developer app of type "Web app (server-side)" with the redirect URI
+`http://127.0.0.1:8080/callback`, then add to `.env`:
+
+```
+HARDCOVER_CLIENT_ID=...
+HARDCOVER_CLIENT_SECRET=...
+SESSION_SECRET=...   # any random string of 32+ characters; it encrypts the cookies
+```
+
+```bash
+uv run --env-file .env hc-wrapup-web
+```
+
+Then open http://127.0.0.1:8080 (not `localhost`, so it matches the redirect URI).
+`BASE_URL`, `HOST` and `PORT` override the defaults for deployment.
+
 ## Development
 
 ```bash
@@ -33,7 +51,8 @@ uv run pytest
 ```
 
 Code lives in `src/hardcover_wrapups/`: `api.py` talks to Hardcover's GraphQL API,
-`render.py` draws the collages, and `cli.py` is the command-line tool.
+`render.py` draws the collages, `cli.py` is the command-line tool, and `web.py`,
+`oauth.py` and `session.py` are the web app.
 
 ## Privacy
 

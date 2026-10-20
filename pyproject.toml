@@ -7,14 +7,18 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.13"
 dependencies = [
+    "cryptography>=50.0.2",
     "httpx>=0.28",
+    "jinja2>=3.1.6",
     "pillow>=11",
+    "python-multipart>=0.0.32",
     "starlette>=0.47",
     "uvicorn>=0.35",
 ]
 
 [project.scripts]
 hc-wrapup = "hardcover_wrapups.cli:main"
+hc-wrapup-web = "hardcover_wrapups.web:serve"
 
 [dependency-groups]
 dev = [
