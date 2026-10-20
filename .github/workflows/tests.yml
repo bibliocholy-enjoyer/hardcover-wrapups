@@ -1,9 +1,8 @@
 name: Tests
 
+# Pull requests only; pushes to main are tested by the deploy workflow before deploying.
 on:
   pull_request:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
