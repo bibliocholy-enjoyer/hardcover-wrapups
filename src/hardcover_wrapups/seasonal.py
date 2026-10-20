@@ -191,8 +191,8 @@ def petal_points(c, length, width, notch, angle):
     return [(c + px, c + py) for px, py in (rotate_point(x, y, angle) for x, y in pts)]
 
 
-def blossom_sprite(size, petal_colors, center_colors, rng, petals=5):
-    """A cherry blossom: notched petals round a centre ringed with stamens."""
+def flower_sprite(size, petals, petal_colors, center_colors, length, width, notch, rng,
+                  stamens=False):
     img = blank(size)
     s = img.width
     c = s / 2
@@ -202,22 +202,29 @@ def blossom_sprite(size, petal_colors, center_colors, rng, petals=5):
     md = ImageDraw.Draw(mask)
     for k in range(petals):
         angle = math.radians(tilt + 360 / petals * k)
-        md.polygon(petal_points(c, 0.42 * s, 0.34 * s, True, angle), fill=255)
+        md.polygon(petal_points(c, length * s, width * s, notch, angle), fill=255)
     petal_fill.putalpha(mask)
     img.alpha_composite(petal_fill)
 
     d = ImageDraw.Draw(img)
-    for k in range(10):
-        a = math.radians(tilt + 36 * k + 12)
-        end = (c + s * 0.16 * math.cos(a), c + s * 0.16 * math.sin(a))
-        d.line([(c, c), end], fill=center_colors[1] + (255,), width=max(1, s // 120))
-        r = s * 0.014
-        d.ellipse([end[0] - r, end[1] - r, end[0] + r, end[1] + r], fill=center_colors[0] + (255,))
-    r = s * 0.06
+    if stamens:
+        for k in range(10):
+            a = math.radians(tilt + 36 * k + 12)
+            end = (c + s * 0.16 * math.cos(a), c + s * 0.16 * math.sin(a))
+            d.line([(c, c), end], fill=center_colors[1] + (255,), width=max(1, s // 120))
+            r = s * 0.014
+            d.ellipse([end[0] - r, end[1] - r, end[0] + r, end[1] + r], fill=center_colors[0] + (255,))
+    r = s * (0.06 if stamens else 0.12)
     centre = radial_gradient(int(2 * r), center_colors[0], center_colors[1]).convert("RGBA")
     round_mask = Image.new("L", centre.size, 0)
     ImageDraw.Draw(round_mask).ellipse([0, 0, centre.width - 1, centre.height - 1], fill=255)
     img.paste(centre, (int(c - r), int(c - r)), round_mask)
+    if not stamens:  # daisy: a few seed dots in the middle
+        for _ in range(14):
+            a, dist = rng.uniform(0, 2 * math.pi), rng.uniform(0, r * 0.7)
+            x, y = c + dist * math.cos(a), c + dist * math.sin(a)
+            d.ellipse([x - s * 0.008, y - s * 0.008, x + s * 0.008, y + s * 0.008],
+                      fill=center_colors[1] + (255,))
     return finish(img, size)
 
 
@@ -232,93 +239,28 @@ def loose_petal_sprite(size, colors):
     return finish(fill, size)
 
 
-def sun_sprite(size, rng):
-    """A sun: a glowing disc with alternating long and short rays."""
-    img = blank(size)
-    s = img.width
-    c = s / 2
-    d = ImageDraw.Draw(img)
-    rays, tilt = 12, rng.uniform(0, math.pi)
-    for k in range(rays):
-        a = tilt + 2 * math.pi * k / rays
-        reach = s * (0.48 if k % 2 == 0 else 0.4)
-        half = math.pi / rays * 0.55
-        d.polygon([(c + s * 0.25 * math.cos(a - half), c + s * 0.25 * math.sin(a - half)),
-                   (c + reach * math.cos(a), c + reach * math.sin(a)),
-                   (c + s * 0.25 * math.cos(a + half), c + s * 0.25 * math.sin(a + half))],
-                  fill=(250, 176, 34, 255))
-    r = s * 0.29
-    disc = radial_gradient(int(2 * r), (255, 230, 90), (250, 168, 30)).convert("RGBA")
-    round_mask = Image.new("L", disc.size, 0)
-    ImageDraw.Draw(round_mask).ellipse([0, 0, disc.width - 1, disc.height - 1], fill=255)
-    img.paste(disc, (int(c - r), int(c - r)), round_mask)
-    return finish(img, size)
-
-
-def watermelon_sprite(size, rng):
-    """A wedge of watermelon: dark rind, pale band, red flesh and seeds."""
-    img = blank(size)
-    s = img.width
-    d = ImageDraw.Draw(img)
-    c, r = s / 2, s * 0.47
-    box = lambda k: [c - r * k, c - r * 0.55 - r * k, c + r * k, c - r * 0.55 + r * k]
-    d.pieslice(box(1.0), 0, 180, fill=(52, 128, 60, 255))     # rind
-    d.pieslice(box(0.92), 0, 180, fill=(196, 230, 160, 255))  # pale band
-    d.pieslice(box(0.85), 0, 180, fill=(236, 70, 84, 255))    # flesh
-    cy = c - r * 0.55
-    for k in range(7):
-        a = math.pi * (k + 0.5) / 7 + rng.uniform(-0.08, 0.08)
-        dist = r * rng.uniform(0.45, 0.62)
-        x, y = c + dist * math.cos(a), cy + dist * math.sin(a)
-        d.ellipse([x - s * 0.018, y - s * 0.03, x + s * 0.018, y + s * 0.03], fill=(40, 30, 30, 255))
-    return finish(img, size)
-
-
-def beach_ball_sprite(size, rng):
-    """A beach ball seen from above: six panels round a white cap, with a highlight."""
+def citrus_sprite(size, rind, flesh):
+    """A slice of citrus: rind, pith and wedge-shaped segments."""
     img = blank(size)
     s = img.width
     d = ImageDraw.Draw(img)
     c, r = s / 2, s * 0.46
-    colors = [(230, 56, 60), (255, 255, 255), (36, 112, 210), (255, 255, 255),
-              (250, 200, 40), (255, 255, 255)]
-    start = rng.uniform(0, 360)
-    for k, color in enumerate(colors):
-        d.pieslice([c - r, c - r, c + r, c + r], start + 60 * k, start + 60 * (k + 1),
-                   fill=color + (255,))
-    d.ellipse([c - r, c - r, c + r, c + r], outline=(200, 200, 205, 255), width=max(2, s // 120))
-    d.ellipse([c - r * 0.16, c - r * 0.16, c + r * 0.16, c + r * 0.16], fill=(255, 255, 255, 255),
-              outline=(210, 210, 215, 255), width=max(2, s // 160))
+    d.ellipse([c - r, c - r, c + r, c + r], fill=rind + (255,))
+    pith = (252, 248, 232)
+    d.ellipse([c - r * 0.9, c - r * 0.9, c + r * 0.9, c + r * 0.9], fill=pith + (255,))
+    segments = 9
+    for k in range(segments):
+        a0 = 2 * math.pi * k / segments + 0.07
+        a1 = 2 * math.pi * (k + 1) / segments - 0.07
+        inner = r * 0.08
+        pts = [(c + inner * math.cos((a0 + a1) / 2), c + inner * math.sin((a0 + a1) / 2))]
+        pts += [(c + r * 0.8 * math.cos(a0 + (a1 - a0) * i / 12),
+                 c + r * 0.8 * math.sin(a0 + (a1 - a0) * i / 12)) for i in range(13)]
+        d.polygon(pts, fill=flesh + (255,))
     shine = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(shine).ellipse([c - r * 0.7, c - r * 0.75, c - r * 0.15, c - r * 0.3],
-                                  fill=(255, 255, 255, 90))
+    ImageDraw.Draw(shine).ellipse([c - r * 0.55, c - r * 0.62, c - r * 0.1, c - r * 0.35],
+                                  fill=(255, 255, 255, 70))
     img.alpha_composite(shine)
-    return finish(img, size)
-
-
-def starfish_sprite(size, rng):
-    """A five-armed starfish with a dotted texture."""
-    img = blank(size)
-    s = img.width
-    c = s / 2
-    pts = []
-    for k in range(10):  # alternate arm tips and the dips between them
-        a = -math.pi / 2 + math.pi * k / 5
-        dist = s * (0.47 if k % 2 == 0 else 0.2)
-        pts.append((c + dist * math.cos(a), c + dist * math.sin(a)))
-    base = rng.choice([((250, 140, 90), (226, 92, 60)), ((248, 176, 96), (222, 120, 56))])
-    fill = radial_gradient(s, base[0], base[1]).convert("RGBA")
-    mask = Image.new("L", (s, s), 0)
-    ImageDraw.Draw(mask).polygon(pts, fill=255)
-    fill.putalpha(mask)
-    img.alpha_composite(fill)
-    d = ImageDraw.Draw(img)
-    for k in range(5):  # a row of dots along each arm
-        a = -math.pi / 2 + 2 * math.pi * k / 5
-        for dist in (0.1, 0.18, 0.26, 0.33):
-            x, y = c + s * dist * math.cos(a), c + s * dist * math.sin(a)
-            dot = s * 0.016
-            d.ellipse([x - dot, y - dot, x + dot, y + dot], fill=(255, 226, 190, 255))
     return finish(img, size)
 
 
@@ -332,6 +274,7 @@ AUTUMN_LEAVES = [
     ((200, 140, 50), (150, 92, 36)),    # ochre
 ]
 SPRING_LEAVES = [((150, 200, 90), (96, 160, 64)), ((176, 214, 110), (120, 178, 72))]
+SUMMER_LEAVES = [((96, 170, 72), (54, 120, 52)), ((130, 190, 84), (78, 146, 60))]
 
 
 def autumn_piece(rng):
@@ -349,8 +292,8 @@ def spring_piece(rng):
     roll = rng.random()
     if roll < 0.55:
         petals = rng.choice([((252, 214, 228), (238, 150, 182)), ((255, 240, 245), (246, 192, 212))])
-        return blossom_sprite(rng.randint(60, 115), petals, ((255, 214, 90), (210, 80, 120)),
-                              rng), False
+        return flower_sprite(rng.randint(60, 115), 5, petals, ((255, 214, 90), (210, 80, 120)),
+                             0.42, 0.34, True, rng, stamens=True), False
     if roll < 0.8:
         return leaf_sprite("beech", rng.randint(55, 100), rng.choice(SPRING_LEAVES)), True
     return loose_petal_sprite(rng.randint(28, 48), ((252, 214, 228), (240, 160, 190))), True
@@ -358,13 +301,16 @@ def spring_piece(rng):
 
 def summer_piece(rng):
     roll = rng.random()
-    if roll < 0.3:
-        return sun_sprite(rng.randint(80, 130), rng), False
-    if roll < 0.55:
-        return watermelon_sprite(rng.randint(75, 120), rng), True
-    if roll < 0.8:
-        return beach_ball_sprite(rng.randint(60, 100), rng), False
-    return starfish_sprite(rng.randint(55, 90), rng), True
+    if roll < 0.45:
+        return flower_sprite(rng.randint(70, 125), rng.choice([16, 18, 20]),
+                             ((255, 255, 255), (240, 236, 222)), ((250, 196, 40), (196, 120, 20)),
+                             0.44, 0.1, False, rng), False
+    if roll < 0.75:
+        rind, flesh = rng.choice([((238, 132, 30), (255, 178, 70)),     # orange
+                                  ((236, 204, 40), (255, 232, 120)),    # lemon
+                                  ((104, 168, 48), (184, 222, 110))])   # lime
+        return citrus_sprite(rng.randint(60, 105), rind, flesh), True
+    return leaf_sprite("beech", rng.randint(60, 105), rng.choice(SUMMER_LEAVES)), True
 
 
 THEMES = {
