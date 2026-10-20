@@ -93,18 +93,24 @@ def cover_url(book):
     return None
 
 
-async def fetch_month(client, token, year, month, max_privacy=PRIVATE, debug=False):
-    """Books finished in the month, oldest first, and the user's username.
-
-    max_privacy leaves out entries more private than it: PUBLIC keeps only public
-    entries, FOLLOWERS_ONLY adds followers-only ones, PRIVATE keeps everything.
-    """
+async def fetch_me(client, token):
+    """The signed-in user, as {'id': ..., 'username': ...}."""
     me = await gql(client, token, ME_QUERY)
     if me.get("errors"):
         raise HardcoverError(f"Could not identify you: {json.dumps(me['errors'])}")
     me = first(me["data"]["me"])
     if not me:
         raise AuthError("Hardcover didn't return a user for this token; sign in again.")
+    return me
+
+
+async def fetch_month(client, token, year, month, max_privacy=PRIVATE, debug=False):
+    """Books finished in the month, oldest first, and the user's username.
+
+    max_privacy leaves out entries more private than it: PUBLIC keeps only public
+    entries, FOLLOWERS_ONLY adds followers-only ones, PRIVATE keeps everything.
+    """
+    me = await fetch_me(client, token)
     start = date(year, month, 1)
     end = date(year + (month == 12), month % 12 + 1, 1)
     variables = {"uid": me["id"], "start": start.isoformat(), "end": end.isoformat(),

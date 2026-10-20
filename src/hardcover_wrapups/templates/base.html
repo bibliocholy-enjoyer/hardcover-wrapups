@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Hardcover Wrap-Ups{% endblock %}</title>
+  <meta name="description" content="Make a cover-collage image of the books you finished this month, from your Hardcover library.">
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+  <script src="{{ url_for('static', path='app.js') }}" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/">Hardcover Wrap-Ups</a>
+    {% if session %}
+    <form class="signout" method="post" action="/logout">
+      <input type="hidden" name="csrf" value="{{ session.csrf }}">
+      <span class="who">Signed in as {{ session.username or "you" }}</span>
+      <button type="submit" class="link-button">Sign out</button>
+    </form>
+    {% endif %}
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <p>An unofficial tool, not made by Hardcover. It reads your library to draw the image and stores nothing.</p>
+    <p><a href="https://github.com/bibliocholy-enjoyer/hardcover-wrapups">Source code</a></p>
+  </footer>
+</body>
+</html>

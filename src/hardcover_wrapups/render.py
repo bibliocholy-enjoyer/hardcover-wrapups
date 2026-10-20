@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-STYLES = ["grid", "shelf", "cork", "calendar", "rainbow", "eight"]
+STYLES = ["grid", "shelf", "cork", "calendar"]
 DEFAULT_STYLE = "grid"
 MAX_COLUMNS = 8
 MAX_NAME_LENGTH = 40
@@ -97,15 +97,17 @@ def render(books, title, out_path, columns=4, cover_w=300):
         tiles.append(img)
 
     columns = max(1, min(columns, len(tiles) or 1))
-    heights = [0] * columns
-    placed = []  # (x, y, img)
-    for img in tiles:  # masonry: drop each cover into the shortest column
-        c = heights.index(min(heights))
-        placed.append((margin + c * (cover_w + gap), header_h + margin // 2 + heights[c], img))
-        heights[c] += img.height + gap
-
     width = 2 * margin + columns * cover_w + (columns - 1) * gap
-    height = header_h + margin // 2 + max(heights or [0]) + margin
+    placed = []  # (x, y, img)
+    y = header_h + margin // 2
+    for start in range(0, len(tiles), columns):  # rows with their tops lined up
+        row = tiles[start:start + columns]
+        x = margin + (columns - len(row)) * (cover_w + gap) // 2  # centre a short last row
+        for img in row:
+            placed.append((x, y, img))
+            x += cover_w + gap
+        y += max(img.height for img in row) + gap
+    height = y - gap + margin
     canvas = Image.new("RGBA", (width, height), (255, 255, 255, 255))
 
     # soft drop shadows, blurred once for all tiles
@@ -299,32 +301,7 @@ def render_cork(books, title, out_path, per_row=4, seed=0):
     canvas.convert("RGB").save(out_path, format="PNG")
 
 
-# ------------------------------------- More layouts: calendar, rainbow, eight ----
-import colorsys  # noqa: E402
-
-
-def dominant_color(book):
-    """Average colour of a cover, weighted toward saturated/bright pixels."""
-    img = book.get("image")
-    if img is None:
-        return (168, 213, 216)  # the placeholder tile colour
-    small = img.convert("RGB").resize((20, 30))
-    px = small.load()
-    tr = tg = tb = tw = 0.0
-    for x in range(small.width):
-        for y in range(small.height):
-            r, g, b = px[x, y]
-            _, sat, val = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
-            wgt = sat * val + 0.001
-            tr, tg, tb, tw = tr + r * wgt, tg + g * wgt, tb + b * wgt, tw + wgt
-    return (int(tr / tw), int(tg / tw), int(tb / tw))
-
-
-def rainbow_key(color):
-    h, sat, val = colorsys.rgb_to_hsv(*(c / 255 for c in color))
-    if sat < 0.2 or val < 0.15:      # black / grey / white covers go last, dark -> light
-        return (1, val)
-    return (0, (h + 0.06) % 1.0)     # shifted so pinkish-reds sort with the reds
+# ---------------------------------------------------------- Calendar ----
 
 
 def centered_text(canvas, text, y, size, fill):
@@ -334,51 +311,6 @@ def centered_text(canvas, text, y, size, fill):
         size -= 2
         f = load_font(size)
     d.text(((canvas.width - d.textlength(text, font=f)) / 2, y), text, font=f, fill=fill)
-
-
-def render_rainbow(books, title, out_path, per_row=None):
-    H, gap, margin, head, strip_h = 400, 22, 50, 140, 46
-    pairs = sorted(((tile_for(b, H), dominant_color(b)) for b in books),
-                   key=lambda p: rainbow_key(p[1]))
-    rows = split_rows(pairs, per_row or (len(pairs) if len(pairs) <= 5 else 4))
-    cols = max(len(r) for r in rows)
-    cw = max(t.width for t, _ in pairs)
-    row_h = H + 14 + strip_h + 36
-    W = 2 * margin + cols * cw + (cols - 1) * gap
-    Hc = head + len(rows) * row_h + margin - 10
-
-    # background: the sorted cover colours as a soft gradient that runs left-to-right
-    # along each row, continuing on the next row (the same order you read the covers)
-    colors = [c for _, c in pairs]
-    canvas = Image.new("RGBA", (W, Hc))
-    d = ImageDraw.Draw(canvas)
-    tops = [0] + [head + ri * row_h - 18 for ri in range(1, len(rows))] + [Hc]
-    for ri in range(len(rows)):
-        for x in range(W):
-            t = (ri + x / max(1, W - 1)) / len(rows) * (len(colors) - 1)
-            i = min(int(t), len(colors) - 2) if len(colors) > 1 else 0
-            f = t - i
-            c1, c2 = colors[i], colors[min(i + 1, len(colors) - 1)]
-            mixed = [c1[k] + (c2[k] - c1[k]) * f for k in range(3)]
-            d.line([(x, tops[ri]), (x, tops[ri + 1])],
-                   fill=tuple(int(m * 0.28 + 255 * 0.72) for m in mixed) + (255,))
-
-    pill = Image.new("RGBA", (W - 2 * margin, 86), (0, 0, 0, 0))
-    ImageDraw.Draw(pill).rounded_rectangle([0, 0, pill.width - 1, pill.height - 1],
-                                           radius=22, fill=(255, 255, 255, 190))
-    canvas.alpha_composite(pill, (margin, 28))
-    centered_text(canvas, title, 28 + 12, 46, (30, 30, 40))
-
-    for ri, row in enumerate(rows):
-        x_off = (cols - len(row)) * (cw + gap) / 2
-        y0 = head + ri * row_h
-        for ci, (t, col) in enumerate(row):
-            x = int(margin + x_off + ci * (cw + gap))
-            paste_shadowed(canvas, t, (x + (cw - t.width) // 2, y0 + (H - t.height)), blur=7)
-            sw = ImageDraw.Draw(canvas)
-            sw.rounded_rectangle([x, y0 + H + 14, x + cw, y0 + H + 14 + strip_h],
-                                 radius=10, fill=col + (255,), outline=(255, 255, 255, 255), width=3)
-    canvas.convert("RGB").save(out_path, format="PNG")
 
 
 BOOK_COLORS = [(231, 76, 60), (52, 152, 219), (46, 174, 96), (155, 89, 182),
@@ -507,41 +439,6 @@ def render_calendar(books, title, out_path, year, month):
     canvas.convert("RGB").save(out_path, format="PNG")
 
 
-def render_eight(books, title, out_path, seed=0):
-    """Covers arranged around two stacked rings that form a figure 8."""
-    rng = random.Random(seed)
-    h, margin, head, band = 240, 60, 150, 40
-    tiles = [tile_for(b, h) for b in books]
-    cw = max(t.width for t in tiles)
-    top_n = math.ceil(len(tiles) / 2)
-    groups = [tiles[:top_n], tiles[top_n:]]
-    # tight rings: the covers at the waist overlap a little, like a woven 8
-    R = max(1.35 * h, max(len(g) for g in groups) * (cw + 18) / (2 * math.pi))
-    W = int(2 * R + band + 2 * margin)
-    cx, cy1 = W / 2, head + R + 40
-    centers = [cy1, cy1 + 2 * R]
-    Hc = int(centers[1] + R + band / 2 + margin)
-
-    canvas = Image.new("RGBA", (W, Hc), (251, 247, 240, 255))
-    centered_text(canvas, title, 40, 52, (35, 32, 30))
-    d = ImageDraw.Draw(canvas)
-    for cy in centers:  # thick band so the "8" reads as a shape behind the covers
-        d.ellipse([cx - R - band / 2, cy - R - band / 2, cx + R + band / 2, cy + R + band / 2],
-                  outline=(236, 227, 211, 255), width=band)
-
-    for gi, (group, cy) in enumerate(zip(groups, centers)):
-        m = len(group)
-        base = 180 if gi == 0 else 0  # leave a gap where the two rings touch
-        angles = [(base + (k + 0.5) * 360 / m) % 360 for k in range(m)]
-        order = sorted(range(m), key=lambda k: (angles[k] - 270) % 360)  # clockwise from the left
-        for t, k in zip(group, order):
-            th = math.radians(angles[k])
-            x, y = cx + R * math.sin(th), cy - R * math.cos(th)
-            r = t.rotate(rng.uniform(-5, 5), expand=True, resample=Image.BICUBIC)
-            paste_shadowed(canvas, r, (int(x - r.width / 2), int(y - r.height / 2)), blur=7)
-    canvas.convert("RGB").save(out_path, format="PNG")
-
-
 def render_style(style, books, title, out, year, month, columns=None, seed=0):
     """Render `books` in the named style to `out` (a path or a writable binary file)."""
     if columns is not None:
@@ -553,10 +450,6 @@ def render_style(style, books, title, out, year, month, columns=None, seed=0):
         render_cork(books, title, out, per_row=cols, seed=seed)
     elif style == "calendar":
         render_calendar(books, title, out, year, month)
-    elif style == "rainbow":
-        render_rainbow(books, title, out, per_row=columns)
-    elif style == "eight":
-        render_eight(books, title, out, seed=seed)
     elif style == "grid":
         render(books, title, out, columns=cols)
     else:

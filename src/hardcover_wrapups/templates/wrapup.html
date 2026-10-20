@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Make your wrap-up · Hardcover Wrap-Ups{% endblock %}
+{% block content %}
+{% if image %}
+<section class="result">
+  <h1>{{ options.month_label }}</h1>
+  <p>{{ book_count }} book{{ "" if book_count == 1 else "s" }}. This image isn't saved anywhere, so download it now.</p>
+  <img src="{{ image }}" alt="Collage of the covers of the books you finished in {{ options.month_label }}">
+  <a class="button" href="{{ image }}" download="{{ options.filename }}">Download image</a>
+</section>
+<h2>Try another style</h2>
+{% else %}
+<h1>Make your wrap-up</h1>
+{% endif %}
+
+{% if errors %}
+<div class="notice error"><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+{% endif %}
+{% if no_books %}
+<p class="notice">No finished books found for {{ options.month_label }}.
+  {% if not options.include_followers %}Only public books were included; tick “Include followers-only books” to add those.{% endif %}</p>
+{% endif %}
+
+<form class="options" method="post" action="/wrapup" data-busy-text="Building your wrap-up…">
+  <input type="hidden" name="csrf" value="{{ session.csrf }}">
+  <fieldset class="row">
+    <legend>Month</legend>
+    <label>Month
+      <select name="month">
+        {% for number, name in months %}
+        <option value="{{ number }}" {% if number == options.month %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Year
+      <input type="number" name="year" value="{{ options.year }}" min="2000" max="{{ this_year }}" required>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Style</legend>
+    <div class="styles">
+      {% for key, label, description in styles %}
+      <label class="style">
+        <input type="radio" name="style" value="{{ key }}" {% if key == options.style %}checked{% endif %}>
+        <span><strong>{{ label }}</strong><small>{{ description }}</small></span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Extras</legend>
+    <label>Title prefix <small>(optional, e.g. “Sam's” makes “Sam's {{ options.month_label }} Reads”)</small>
+      <input type="text" name="name" value="{{ options.name }}" maxlength="{{ max_name_length }}" autocomplete="off">
+    </label>
+    <label>Books per row <small>(grid, shelf and cork)</small>
+      <input type="number" name="columns" value="{{ options.columns or default_columns }}" min="1" max="{{ max_columns }}">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="include_followers" {% if options.include_followers %}checked{% endif %}>
+      Include followers-only books
+    </label>
+  </fieldset>
+
+  <button type="submit" class="button">Make my wrap-up</button>
+  <p class="busy" role="status" aria-live="polite"></p>
+</form>
+{% endblock %}
