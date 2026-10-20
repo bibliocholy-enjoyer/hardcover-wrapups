@@ -44,6 +44,16 @@ uv run --env-file .env hc-wrapup-web
 Then open http://127.0.0.1:8080 (not `localhost`, so it matches the redirect URI).
 `BASE_URL`, `HOST` and `PORT` override the defaults for deployment.
 
+## Deploying
+
+The site runs on Fly.io (`fly.toml`, `Dockerfile`). Every merge to `main` is tested
+and deployed by `.github/workflows/deploy.yml`, using an app-scoped Fly deploy token
+stored as the `FLY_API_TOKEN` repository secret. The Hardcover client ID and secret
+and `SESSION_SECRET` are Fly secrets (`fly secrets set`).
+
+To deploy by hand, run `fly deploy`. To roll back, find an earlier image with
+`fly releases -a hardcover-wrapups --image` and run `fly deploy --image <image>`.
+
 ## Development
 
 ```bash
