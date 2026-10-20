@@ -23,7 +23,7 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import MutableHeaders
 from starlette.middleware import Middleware
-from starlette.responses import PlainTextResponse, RedirectResponse
+from starlette.responses import FileResponse, PlainTextResponse, RedirectResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -368,6 +368,10 @@ def create_app(settings, transport=None, today=date.today):
     async def healthz(request):
         return PlainTextResponse("ok")
 
+    async def favicon(request):  # browsers ask for /favicon.ico whatever the page links to
+        return FileResponse(HERE / "static" / "favicon.ico", media_type="image/x-icon",
+                            headers={"cache-control": "public, max-age=604800"})
+
     return Starlette(
         routes=[
             Route("/", index),
@@ -377,6 +381,7 @@ def create_app(settings, transport=None, today=date.today):
             Route("/wrapup", make_wrapup, methods=["POST"]),
             Route("/logout", logout, methods=["POST"]),
             Route("/healthz", healthz),
+            Route("/favicon.ico", favicon),
             Mount("/static", StaticFiles(directory=HERE / "static"), name="static"),
         ],
         middleware=[Middleware(SecurityHeadersAndLogging)],

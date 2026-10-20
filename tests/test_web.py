@@ -321,3 +321,11 @@ def test_very_large_month_is_capped(client, hardcover):
     resp = make_wrapup(client)
     assert resp.status_code == 200
     assert f"Showing the first {web.MAX_BOOKS} of your {web.MAX_BOOKS + 5} books" in resp.text
+
+
+def test_favicon_is_served(client):
+    resp = client.get("/favicon.ico")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/x-icon"
+    assert "max-age" in resp.headers["cache-control"]
+    assert 'rel="apple-touch-icon"' in client.get("/").text
