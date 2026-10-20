@@ -50,3 +50,7 @@ def test_columns_are_clamped():
     render.render_style("grid", books, "T", out, 2026, 8, columns=10_000)
     # grid width is 2 * margin + columns * cover + (columns - 1) * gap
     assert Image.open(io.BytesIO(out.getvalue())).width == 80 + render.MAX_COLUMNS * 300 + 7 * 18
+
+
+def test_uses_bundled_font():
+    assert str(render.load_font(20).path) == str(render.FONT_PATH)

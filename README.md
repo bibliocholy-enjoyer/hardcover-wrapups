@@ -42,5 +42,6 @@ to draw the image and stores nothing.
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Book data and covers come from Hardcover and are used
+MIT. See [LICENSE](LICENSE). The bundled DejaVu Sans Bold font has its own permissive
+license in [src/hardcover_wrapups/fonts/DejaVu-LICENSE](src/hardcover_wrapups/fonts/DejaVu-LICENSE). Book data and covers come from Hardcover and are used
 under [Hardcover's API terms](https://docs.hardcover.app/api/).

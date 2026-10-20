@@ -6,7 +6,6 @@ Book dicts have 'title', 'authors', 'finished', 'started' (from api.fetch_month)
 import calendar
 import functools
 import io
-import os
 from datetime import date
 from pathlib import Path
 
@@ -44,25 +43,13 @@ def make_title(year, month, name=None):
 
 # ------------------------------------------------------------ Drawing ----
 
-FONT_CANDIDATES = [
-    str(Path(__file__).parent / "fonts" / "DejaVuSans-Bold.ttf"),  # bundled, used if present
-    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",   # macOS
-    "/System/Library/Fonts/Helvetica.ttc",
-    "/Library/Fonts/Arial Bold.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux
-    "C:/Windows/Fonts/arialbd.ttf",                          # Windows
-]
+# Bundled so images look the same on every machine; see fonts/DejaVu-LICENSE.
+FONT_PATH = Path(__file__).parent / "fonts" / "DejaVuSans-Bold.ttf"
 
 
 @functools.cache
 def load_font(size):
-    for path in FONT_CANDIDATES:
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, size)
-            except OSError:
-                pass
-    return ImageFont.load_default(size)
+    return ImageFont.truetype(FONT_PATH, size)
 
 
 def wrap(draw, text, font, max_width):
