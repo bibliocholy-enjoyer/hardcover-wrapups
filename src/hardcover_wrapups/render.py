@@ -1,148 +1,25 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.9"
-# dependencies = ["pillow"]
-# ///
-"""Make a StoryGraph-style monthly wrap-up cover collage from your Hardcover library.
+"""Cover-collage renderers. Each one takes a list of book dicts and writes a PNG.
 
-Setup:
-    export HARDCOVER_TOKEN="hc_pat_..."
-
-Usage (uv installs pillow automatically):
-    uv run hc_wrapup.py 8 2026
-    uv run hc_wrapup.py august 2026 --columns 5 --name "Sam's"
-    uv run hc_wrapup.py 8 2026 --style shelf   # bookshelf
-    uv run hc_wrapup.py 8 2026 --style cork    # corkboard
-    uv run hc_wrapup.py 8 2026 --style calendar  # covers on the day you finished them
-    uv run hc_wrapup.py 8 2026 --style rainbow   # sorted by cover colour
-    uv run hc_wrapup.py 8 2026 --style eight     # covers arranged in a figure 8
-    uv run hc_wrapup.py 8 2026 --debug        # print what the API returned
+Book dicts have 'title', 'authors', 'finished', 'started' (from api.fetch_month) and
+'image' (a PIL.Image, or None to draw a placeholder tile).
 """
-import argparse
 import calendar
 import io
-import json
 import os
-import sys
-import urllib.error
-import urllib.request
 from datetime import date
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-API_URL = "https://api.hardcover.app/v1/graphql"
-
-# Ways Hardcover might expose the cover image; we try each until one is accepted.
-IMAGE_FIELDS = ["image { url }", "cached_image"]
-
-ME_QUERY = "query { me { id username } }"
-
-BOOKS_QUERY = """
-query ($uid: Int!, $start: date!, $end: date!) {
-  user_books(where: {
-    user_id: {_eq: $uid},
-    user_book_reads: {finished_at: {_gte: $start, _lt: $end}}
-  }) {
-    user_book_reads(
-      where: {finished_at: {_gte: $start, _lt: $end}},
-      order_by: {finished_at: asc}
-    ) { started_at finished_at }
-    book {
-      title
-      %IMAGE%
-      contributions { author { name } }
-    }
-  }
-}
-"""
+STYLES = ["grid", "shelf", "cork", "calendar", "rainbow", "eight"]
 
 
-# ---------------------------------------------------------------- API ----
-
-def gql(token, query, variables=None):
-    auth = token if token.lower().startswith("bearer ") else f"Bearer {token}"
-    req = urllib.request.Request(
-        API_URL,
-        data=json.dumps({"query": query, "variables": variables or {}}).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "authorization": auth,
-            "User-Agent": "hc-wrapup-script/0.1",
-        },
-    )
+def open_cover(data):
+    """Decode downloaded cover bytes, or return None so a placeholder is drawn."""
+    if not data:
+        return None
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.load(resp)
-    except urllib.error.HTTPError as e:
-        sys.exit(f"HTTP {e.code} from Hardcover: {e.read().decode(errors='replace')}")
-    except urllib.error.URLError as e:
-        sys.exit(f"Network error: {e.reason}")
-
-
-def first(x):
-    """`me` comes back as a list in Hardcover's API; tolerate a plain object too."""
-    return x[0] if isinstance(x, list) else x
-
-
-def cover_url(book):
-    for key in ("image", "cached_image"):
-        val = book.get(key)
-        if isinstance(val, str):
-            try:
-                val = json.loads(val)
-            except ValueError:
-                return val or None
-        if isinstance(val, dict) and val.get("url"):
-            return val["url"]
-    return None
-
-
-def fetch_month(token, year, month, debug=False):
-    me = gql(token, ME_QUERY)
-    if me.get("errors"):
-        sys.exit(f"Could not identify you: {json.dumps(me['errors'], indent=2)}")
-    me = first(me["data"]["me"])
-    start = date(year, month, 1)
-    end = date(year + (month == 12), month % 12 + 1, 1)
-    variables = {"uid": me["id"], "start": start.isoformat(), "end": end.isoformat()}
-
-    last_errors = None
-    for image_field in IMAGE_FIELDS:
-        resp = gql(token, BOOKS_QUERY.replace("%IMAGE%", image_field), variables)
-        if resp.get("errors"):
-            last_errors = resp["errors"]
-            continue
-        rows = resp["data"]["user_books"]
-        if debug:
-            print(json.dumps(rows, indent=2))
-        books = []
-        for r in rows:
-            reads = r.get("user_book_reads") or [{}]
-            book = r["book"]
-            authors = []
-            for c in book.get("contributions") or []:
-                name = (c.get("author") or {}).get("name")
-                if name and name not in authors:
-                    authors.append(name)
-            books.append({
-                "title": book.get("title") or "Untitled",
-                "authors": authors,
-                "url": cover_url(book),
-                "finished": reads[0].get("finished_at") or "",
-                "started": reads[0].get("started_at") or "",
-            })
-        books.sort(key=lambda b: b["finished"])
-        return books, me.get("username")
-    sys.exit(f"The books query failed:\n{json.dumps(last_errors, indent=2)}")
-
-
-def download(url):
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "hc-wrapup-script/0.1"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return Image.open(io.BytesIO(resp.read())).convert("RGB")
-    except Exception as e:  # noqa: BLE001 - any failure just means "use a placeholder"
-        print(f"  (could not load cover {url}: {e})", file=sys.stderr)
+        return Image.open(io.BytesIO(data)).convert("RGB")
+    except Exception:  # noqa: BLE001 - an undecodable cover just gets a placeholder
         return None
 
 
@@ -244,7 +121,7 @@ def render(books, title, out_path, columns=4, cover_w=300):
     d.text(((width - tw) / 2, 22 + (header_h - 30 - 46) / 2 - 4), title,
            font=f, fill=(30, 30, 40))
 
-    canvas.convert("RGB").save(out_path)
+    canvas.convert("RGB").save(out_path, format="PNG")
 
 
 # ------------------------------------------- Themed layouts (all drawn in code) ----
@@ -365,7 +242,7 @@ def render_shelf(books, title, out_path, per_row=4, seed=0):
 
     plaque = text_plaque(title, (120, 84, 52), (248, 236, 210), 44, rng)
     paste_shadowed(canvas, plaque, ((W - plaque.width) // 2, 40), blur=6, offset=(0, 6), opacity=110)
-    canvas.convert("RGB").save(out_path)
+    canvas.convert("RGB").save(out_path, format="PNG")
 
 
 def draw_pin(canvas, px, py, col):
@@ -414,7 +291,7 @@ def render_cork(books, title, out_path, per_row=4, seed=0):
             px, py = cx + v * math.sin(a), cy + v * math.cos(a)
             col = pins[(ri * 3 + ci) % len(pins)]
             draw_pin(canvas, px, py, col)
-    canvas.convert("RGB").save(out_path)
+    canvas.convert("RGB").save(out_path, format="PNG")
 
 
 # ------------------------------------- More layouts: calendar, rainbow, eight ----
@@ -496,7 +373,7 @@ def render_rainbow(books, title, out_path, per_row=None):
             sw = ImageDraw.Draw(canvas)
             sw.rounded_rectangle([x, y0 + H + 14, x + cw, y0 + H + 14 + strip_h],
                                  radius=10, fill=col + (255,), outline=(255, 255, 255, 255), width=3)
-    canvas.convert("RGB").save(out_path)
+    canvas.convert("RGB").save(out_path, format="PNG")
 
 
 BOOK_COLORS = [(231, 76, 60), (52, 152, 219), (46, 174, 96), (155, 89, 182),
@@ -622,7 +499,7 @@ def render_calendar(books, title, out_path, year, month):
         by = fy + 17
         d.ellipse([bx - 10, by - 10, bx + 10, by + 10], fill=color + (255,))
         d.line([(bx - 5, by), (bx - 1, by + 4), (bx + 5, by - 4)], fill=(255, 255, 255, 255), width=3)
-    canvas.convert("RGB").save(out_path)
+    canvas.convert("RGB").save(out_path, format="PNG")
 
 
 def render_eight(books, title, out_path, seed=0):
@@ -657,72 +534,23 @@ def render_eight(books, title, out_path, seed=0):
             x, y = cx + R * math.sin(th), cy - R * math.cos(th)
             r = t.rotate(rng.uniform(-5, 5), expand=True, resample=Image.BICUBIC)
             paste_shadowed(canvas, r, (int(x - r.width / 2), int(y - r.height / 2)), blur=7)
-    canvas.convert("RGB").save(out_path)
+    canvas.convert("RGB").save(out_path, format="PNG")
 
 
-# --------------------------------------------------------------- Main ----
-
-def parse_month(text):
-    if text.isdigit():
-        m = int(text)
-    else:
-        names = {n.lower(): i for i, n in enumerate(calendar.month_name) if n}
-        names.update({n.lower(): i for i, n in enumerate(calendar.month_abbr) if n})
-        m = names.get(text.lower(), 0)
-    if not 1 <= m <= 12:
-        sys.exit(f"Don't understand month {text!r} (use 1-12 or a name like 'august').")
-    return m
-
-
-def main():
-    p = argparse.ArgumentParser(description="Monthly cover-collage wrap-up from Hardcover.")
-    p.add_argument("month", help="1-12 or a month name")
-    p.add_argument("year", type=int)
-    p.add_argument("--style", choices=["grid", "shelf", "cork", "calendar", "rainbow", "eight"],
-                   default="grid",
-                   help="grid (default), shelf, cork, calendar (by finish date), "
-                        "rainbow (sorted by cover colour) or eight (figure-8 ring layout)")
-    p.add_argument("--columns", type=int, default=None,
-                   help="books per row for grid/shelf/cork/rainbow (default 4)")
-    p.add_argument("--seed", type=int, default=0,
-                   help="changes the random tilt/placement for shelf and cork")
-    p.add_argument("--name", help="prefix for the title, e.g. \"Sam's\"")
-    p.add_argument("-o", "--output", help="output PNG path")
-    p.add_argument("--debug", action="store_true", help="print the raw API response")
-    args = p.parse_args()
-
-    token = os.environ.get("HARDCOVER_TOKEN")
-    if not token:
-        sys.exit("Set the HARDCOVER_TOKEN environment variable first.")
-
-    month = parse_month(args.month)
-    books, _username = fetch_month(token, args.year, month, args.debug)
-    if not books:
-        sys.exit(f"No finished reads found for {calendar.month_name[month]} {args.year}.")
-
-    print(f"Found {len(books)} book(s); downloading covers...")
-    for b in books:
-        b["image"] = download(b["url"]) if b["url"] else None
-
-    title = f"{calendar.month_name[month]} {args.year} Reads"
-    if args.name:
-        title = f"{args.name} {title}"
-    out = args.output or f"wrapup-{args.year}-{month:02d}-{args.style}.png"
-    cols = args.columns or 4
-    if args.style == "shelf":
-        render_shelf(books, title, out, per_row=cols, seed=args.seed)
-    elif args.style == "cork":
-        render_cork(books, title, out, per_row=cols, seed=args.seed)
-    elif args.style == "calendar":
-        render_calendar(books, title, out, args.year, month)
-    elif args.style == "rainbow":
-        render_rainbow(books, title, out, per_row=args.columns)
-    elif args.style == "eight":
-        render_eight(books, title, out, seed=args.seed)
-    else:
+def render_style(style, books, title, out, year, month, columns=None, seed=0):
+    """Render `books` in the named style to `out` (a path or a writable binary file)."""
+    cols = columns or 4
+    if style == "shelf":
+        render_shelf(books, title, out, per_row=cols, seed=seed)
+    elif style == "cork":
+        render_cork(books, title, out, per_row=cols, seed=seed)
+    elif style == "calendar":
+        render_calendar(books, title, out, year, month)
+    elif style == "rainbow":
+        render_rainbow(books, title, out, per_row=columns)
+    elif style == "eight":
+        render_eight(books, title, out, seed=seed)
+    elif style == "grid":
         render(books, title, out, columns=cols)
-    print(f"Saved {out}")
-
-
-if __name__ == "__main__":
-    main()
+    else:
+        raise ValueError(f"Unknown style {style!r}")
