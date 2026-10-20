@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-STYLES = ["grid", "shelf", "cork", "calendar"]
+STYLES = ["grid", "seasonal", "shelf", "cork", "calendar"]
 DEFAULT_STYLE = "grid"
 MAX_COLUMNS = 8
 MAX_NAME_LENGTH = 40
@@ -83,9 +83,8 @@ def placeholder(book, width):
     return img
 
 
-def render(books, title, out_path, columns=4, cover_w=300):
-    """books: list of dicts with 'image' (PIL.Image or None), 'title', 'authors'."""
-    gap, margin, header_h = 18, 40, 120
+def grid_tiles(books, cover_w):
+    """Covers scaled to cover_w wide (at most twice as tall), or placeholder tiles."""
     tiles = []
     for b in books:
         img = b.get("image")
@@ -95,29 +94,47 @@ def render(books, title, out_path, columns=4, cover_w=300):
             h = min(int(img.height * cover_w / img.width), cover_w * 2)
             img = img.resize((cover_w, h), Image.LANCZOS)
         tiles.append(img)
+    return tiles
 
+
+def grid_layout(tiles, columns, cover_w, gap, left, top):
+    """Place tiles in rows with their tops lined up, centring a short last row.
+
+    Returns ([(x, y, tile), ...], the grid's width, and the y just below the last row).
+    """
     columns = max(1, min(columns, len(tiles) or 1))
-    width = 2 * margin + columns * cover_w + (columns - 1) * gap
-    placed = []  # (x, y, img)
-    y = header_h + margin // 2
-    for start in range(0, len(tiles), columns):  # rows with their tops lined up
+    grid_w = columns * cover_w + (columns - 1) * gap
+    placed = []
+    y = top
+    for start in range(0, len(tiles), columns):
         row = tiles[start:start + columns]
-        x = margin + (columns - len(row)) * (cover_w + gap) // 2  # centre a short last row
+        x = left + (columns - len(row)) * (cover_w + gap) // 2
         for img in row:
             placed.append((x, y, img))
             x += cover_w + gap
         y += max(img.height for img in row) + gap
-    height = y - gap + margin
-    canvas = Image.new("RGBA", (width, height), (255, 255, 255, 255))
+    return placed, grid_w, y - gap
 
-    # soft drop shadows, blurred once for all tiles
+
+def paste_tiles(canvas, placed, opacity=70, blur=7):
+    """Paste tiles onto an RGBA canvas over soft drop shadows (blurred once for all)."""
     shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     sd = ImageDraw.Draw(shadow)
     for x, y, img in placed:
-        sd.rectangle([x + 3, y + 6, x + img.width + 3, y + img.height + 6], fill=(0, 0, 0, 70))
-    canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(7)))
+        sd.rectangle([x + 3, y + 6, x + img.width + 3, y + img.height + 6], fill=(0, 0, 0, opacity))
+    canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(blur)))
     for x, y, img in placed:
         canvas.paste(img, (x, y))
+
+
+def render(books, title, out_path, columns=4, cover_w=300):
+    """books: list of dicts with 'image' (PIL.Image or None), 'title', 'authors'."""
+    gap, margin, header_h = 18, 40, 120
+    tiles = grid_tiles(books, cover_w)
+    placed, grid_w, bottom = grid_layout(tiles, columns, cover_w, gap, margin, header_h + margin // 2)
+    width, height = 2 * margin + grid_w, bottom + margin
+    canvas = Image.new("RGBA", (width, height), (255, 255, 255, 255))
+    paste_tiles(canvas, placed)
 
     # header bar
     d = ImageDraw.Draw(canvas)
@@ -439,8 +456,11 @@ def render_calendar(books, title, out_path, year, month):
     canvas.convert("RGB").save(out_path, format="PNG")
 
 
-def render_style(style, books, title, out, year, month, columns=None, seed=0):
-    """Render `books` in the named style to `out` (a path or a writable binary file)."""
+def render_style(style, books, title, out, year, month, columns=None, seed=0, theme=None):
+    """Render `books` in the named style to `out` (a path or a writable binary file).
+
+    `theme` picks the seasonal style's season; None means the month's season.
+    """
     if columns is not None:
         columns = max(1, min(columns, MAX_COLUMNS))
     cols = columns or 4
@@ -450,6 +470,11 @@ def render_style(style, books, title, out, year, month, columns=None, seed=0):
         render_cork(books, title, out, per_row=cols, seed=seed)
     elif style == "calendar":
         render_calendar(books, title, out, year, month)
+    elif style == "seasonal":
+        from . import seasonal  # imports this module, so load it on demand
+
+        theme = theme or seasonal.theme_for_month(month)
+        seasonal.render_seasonal(books, title, out, columns=cols, theme=theme, seed=seed)
     elif style == "grid":
         render(books, title, out, columns=cols)
     else:

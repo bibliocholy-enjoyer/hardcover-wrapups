@@ -38,11 +38,21 @@ HERE = Path(__file__).parent
 # Same order as render.STYLES; kept here so the form doesn't have to import Pillow.
 STYLE_CHOICES = [
     ("grid", "Grid", "Covers in neat columns"),
+    ("seasonal", "Seasonal", "The grid, with a border for the season"),
     ("shelf", "Shelf", "Covers standing on a wooden bookshelf"),
     ("cork", "Corkboard", "Covers pinned to a corkboard"),
     ("calendar", "Calendar", "Covers on the days you read them"),
 ]
 DEFAULT_STYLE = "grid"
+
+# Seasonal themes; "auto" picks the month's season (northern hemisphere).
+THEME_CHOICES = [
+    ("auto", "Automatic (from the month)"),
+    ("autumn", "Autumn leaves"),
+    ("winter", "Snowflakes"),
+    ("spring", "Spring blossoms"),
+    ("summer", "Summer flowers and citrus"),
+]
 DEFAULT_COLUMNS = 4
 MAX_COLUMNS = 8
 MAX_NAME_LENGTH = 40
@@ -108,6 +118,7 @@ class Options:
     columns: int | None = None
     name: str = ""
     include_followers: bool = False
+    theme: str = "auto"
 
     @property
     def max_privacy(self):
@@ -150,6 +161,10 @@ def parse_options(form, today):
     if style not in {key for key, _, _ in STYLE_CHOICES}:
         errors.append("Pick one of the styles.")
         style = DEFAULT_STYLE
+    theme = form.get("theme", "auto")
+    if theme not in {key for key, _ in THEME_CHOICES}:
+        errors.append("Pick one of the seasons.")
+        theme = "auto"
     columns = None
     if form.get("columns", "").strip():
         columns = number("columns", 1, MAX_COLUMNS, "Books per row")
@@ -160,7 +175,7 @@ def parse_options(form, today):
     if errors:
         return None, errors
     return Options(year=year, month=month, style=style, columns=columns, name=name,
-                   include_followers=form.get("include_followers") == "on"), []
+                   include_followers=form.get("include_followers") == "on", theme=theme), []
 
 
 def build_png(books, covers, options):
@@ -172,7 +187,8 @@ def build_png(books, covers, options):
     title = render.make_title(options.year, options.month, options.name)
     out = io.BytesIO()
     render.render_style(options.style, books, title, out, options.year, options.month,
-                        columns=options.columns)
+                        columns=options.columns,
+                        theme=None if options.theme == "auto" else options.theme)
     return out.getvalue()
 
 
@@ -239,7 +255,7 @@ def create_app(settings, transport=None, today=date.today):
 
     def form_page(request, session, options, status=200, **context):
         return page(request, "wrapup.html", status=status, session=session, options=options,
-                    styles=STYLE_CHOICES, months=list(enumerate(calendar.month_name))[1:],
+                    styles=STYLE_CHOICES, themes=THEME_CHOICES, months=list(enumerate(calendar.month_name))[1:],
                     this_year=today().year, default_columns=DEFAULT_COLUMNS, max_columns=MAX_COLUMNS,
                     max_name_length=MAX_NAME_LENGTH, **context)
 

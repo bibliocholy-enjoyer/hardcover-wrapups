@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 from starlette.testclient import TestClient
 
-from hardcover_wrapups import api, oauth, render, web
+from hardcover_wrapups import api, oauth, render, seasonal, web
 from hardcover_wrapups.session import Sealer
 
 SETTINGS = web.Settings(client_id="client-123", client_secret="shh-secret",
@@ -287,3 +287,29 @@ def test_wrong_client_secret_is_logged_with_error_code(client, hardcover, caplog
     resp = sign_in(client)
     assert resp.status_code == 502
     assert "invalid_client" in caplog.text
+
+
+def test_seasonal_theme_is_passed_through(client, monkeypatch):
+    seen = {}
+    real = render.render_style
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+    monkeypatch.setattr(render, "render_style", spy)
+    sign_in(client)
+    assert make_wrapup(client, style="seasonal", theme="winter").status_code == 200
+    assert seen["theme"] == "winter"
+    make_wrapup(client, style="seasonal", theme="auto")
+    assert seen["theme"] is None
+
+
+def test_unknown_theme_is_rejected(client):
+    sign_in(client)
+    resp = make_wrapup(client, style="seasonal", theme="monsoon")
+    assert resp.status_code == 400
+    assert "Pick one of the seasons" in resp.text
+
+
+def test_theme_choices_match_seasonal_themes():
+    assert [key for key, _ in web.THEME_CHOICES[1:]] == seasonal.THEME_NAMES
