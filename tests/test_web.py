@@ -313,3 +313,11 @@ def test_unknown_theme_is_rejected(client):
 
 def test_theme_choices_match_seasonal_themes():
     assert [key for key, _ in web.THEME_CHOICES[1:]] == seasonal.THEME_NAMES
+
+
+def test_favicon_is_served(client):
+    resp = client.get("/favicon.ico")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/x-icon"
+    assert "max-age" in resp.headers["cache-control"]
+    assert 'rel="apple-touch-icon"' in client.get("/").text
