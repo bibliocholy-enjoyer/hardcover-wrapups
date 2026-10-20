@@ -4,7 +4,9 @@
 {% if image %}
 <section class="result">
   <h1>{{ options.month_label }}</h1>
-  <p>{{ book_count }} book{{ "" if book_count == 1 else "s" }}. This image isn't saved anywhere, so download it now.</p>
+  <p>{% if total_books > book_count %}Showing the first {{ book_count }} of your {{ total_books }} books, the most one image can hold.
+     {% else %}{{ book_count }} book{{ "" if book_count == 1 else "s" }}.{% endif %}
+     This image isn't saved anywhere, so download it now.</p>
   <img src="{{ image }}" alt="Collage of the covers of the books you finished in {{ options.month_label }}">
   <a class="button" href="{{ image }}" download="{{ options.filename }}">Download image</a>
 </section>

@@ -315,6 +315,14 @@ def test_theme_choices_match_seasonal_themes():
     assert [key for key, _ in web.THEME_CHOICES[1:]] == seasonal.THEME_NAMES
 
 
+def test_very_large_month_is_capped(client, hardcover):
+    hardcover.rows = hardcover.rows * (web.MAX_BOOKS + 5)
+    sign_in(client)
+    resp = make_wrapup(client)
+    assert resp.status_code == 200
+    assert f"Showing the first {web.MAX_BOOKS} of your {web.MAX_BOOKS + 5} books" in resp.text
+
+
 def test_favicon_is_served(client):
     resp = client.get("/favicon.ico")
     assert resp.status_code == 200

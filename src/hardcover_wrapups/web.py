@@ -63,8 +63,11 @@ CURRENT_MONTH_DAYS = 5
 LOGIN_COOKIE, LOGIN_MAX_AGE = "hcw_login", 10 * 60
 SESSION_COOKIE, SESSION_MAX_AGE = "hcw_session", 15 * 60
 
-# Each render holds every cover in memory; cap how many run at once.
-MAX_CONCURRENT_RENDERS = 2
+# Rendering takes about 50 MB plus 5.5 MB per book (measured: 94 MB for 8 books,
+# 271 MB for 40), so on a 512 MB machine render one image at a time and cap the
+# number of books in one image. Anyone else waits a second or two.
+MAX_CONCURRENT_RENDERS = 1
+MAX_BOOKS = 60
 
 MESSAGES = {
     "expired": "Your session ended. Sign in again to make another wrap-up.",
@@ -339,6 +342,8 @@ def create_app(settings, transport=None, today=date.today):
                                                  options.month, options.max_privacy)
                 if not books:
                     return form_page(request, session, options, no_books=True)
+                total = len(books)
+                books = books[:MAX_BOOKS]
                 covers = await api.download_covers(client, [b["url"] for b in books])
                 png = await run_in_threadpool(build_png, books, covers, options)
         except api.AuthError:
@@ -348,7 +353,8 @@ def create_app(settings, transport=None, today=date.today):
             return error_page(request, "Couldn't get your books from Hardcover. "
                                        "Please try again in a minute.", 502)
         image = "data:image/png;base64," + base64.b64encode(png).decode()
-        return form_page(request, session, options, image=image, book_count=len(books))
+        return form_page(request, session, options, image=image, book_count=len(books),
+                         total_books=total)
 
     async def logout(request):
         session = get_session(request)

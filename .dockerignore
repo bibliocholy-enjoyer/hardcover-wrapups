@@ -8,3 +8,6 @@ __pycache__/
 wrapup-*.png
 tests/
 .DS_Store
+.github/
+Dockerfile
+fly.toml

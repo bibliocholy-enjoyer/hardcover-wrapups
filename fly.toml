@@ -1,0 +1,29 @@
+# Fly.io configuration: https://fly.io/docs/reference/configuration/
+app = "hardcover-wrapups"
+primary_region = "iad"  # next to Hardcover's API (DigitalOcean, New York area)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  BASE_URL = "https://hardcover-wrapups.fly.dev"
+  # HARDCOVER_CLIENT_ID, HARDCOVER_CLIENT_SECRET and SESSION_SECRET are set with `fly secrets set`.
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Scale to zero: suspend when idle (wakes in a few hundred ms), start on the next request.
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "60s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
