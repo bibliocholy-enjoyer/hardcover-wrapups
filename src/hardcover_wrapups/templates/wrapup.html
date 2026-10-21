@@ -29,8 +29,8 @@
     <legend>Month</legend>
     <label>Month
       <select name="month">
-        {% for number, name in months %}
-        <option value="{{ number }}" {% if number == options.month %}selected{% endif %}>{{ name }}</option>
+        {% for number, name, season in months %}
+        <option value="{{ number }}" data-season="{{ season }}" {% if number == options.month %}selected{% endif %}>{{ name }}</option>
         {% endfor %}
       </select>
     </label>
@@ -49,10 +49,10 @@
       </label>
       {% endfor %}
     </div>
-    <label class="season">Season <small>(seasonal style)</small>
+    <label class="season" data-styles="seasonal">Season
       <select name="theme">
         {% for key, label in themes %}
-        <option value="{{ key }}" {% if key == options.theme %}selected{% endif %}>{{ label }}</option>
+        <option value="{{ key }}" {% if key == options.season %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
     </label>
@@ -63,7 +63,7 @@
     <label>Title prefix <small>(optional, e.g. “Sam's” makes “Sam's {{ options.month_label }} Reads”)</small>
       <input type="text" name="name" value="{{ options.name }}" maxlength="{{ max_name_length }}" autocomplete="off">
     </label>
-    <label>Books per row <small>(grid, seasonal, shelf and cork)</small>
+    <label data-styles="grid seasonal shelf cork">Books per row
       <input type="number" name="columns" value="{{ options.columns or default_columns }}" min="1" max="{{ max_columns }}">
     </label>
     <label class="check">

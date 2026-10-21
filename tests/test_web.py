@@ -8,6 +8,7 @@ from datetime import date
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
+
 import pytest
 from PIL import Image
 from starlette.testclient import TestClient
@@ -185,7 +186,8 @@ def test_form_defaults_to_last_month(client):
     sign_in(client)
     page = client.get("/wrapup")
     assert page.status_code == 200
-    assert '<option value="9" selected>' in page.text
+    assert '<option value="9" data-season="autumn" selected>' in page.text
+    assert '<option value="autumn" selected>' in page.text  # September's season
     assert 'value="2026"' in page.text
     assert "Signed in as sam" in page.text
     assert 'name="columns" value="4"' in page.text
@@ -301,8 +303,8 @@ def test_seasonal_theme_is_passed_through(client, monkeypatch):
     sign_in(client)
     assert make_wrapup(client, style="seasonal", theme="winter").status_code == 200
     assert seen["theme"] == "winter"
-    make_wrapup(client, style="seasonal", theme="auto")
-    assert seen["theme"] is None
+    make_wrapup(client, style="seasonal")  # no season picked: the month's (September)
+    assert seen["theme"] == "autumn"
 
 
 def test_unknown_theme_is_rejected(client):
@@ -313,7 +315,9 @@ def test_unknown_theme_is_rejected(client):
 
 
 def test_theme_choices_match_seasonal_themes():
-    assert [key for key, _ in web.THEME_CHOICES[1:]] == seasonal.THEME_NAMES
+    assert [key for key, _ in web.THEME_CHOICES] == seasonal.THEME_NAMES
+    for month in range(1, 13):
+        assert web.season_for_month(month) == seasonal.theme_for_month(month)
 
 
 def test_very_large_month_is_capped(client, hardcover):
@@ -339,3 +343,22 @@ def test_pages_link_assets_with_relative_paths(client):
     for page in (client.get("/"), client.get("/wrapup")):
         assert "http://testserver" not in page.text
         assert 'href="/static/style.css"' in page.text
+
+
+def test_policy_page(client):
+    resp = client.get("/privacy")
+    assert resp.status_code == 200
+    assert "<h1>Privacy Policy and Terms of Use</h1>" in resp.text
+    assert 'href="/privacy"' in client.get("/").text
+
+
+def test_terms_redirects_to_policy_page(client):
+    resp = client.get("/terms", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["location"] == "/privacy"
+
+
+def test_landing_page_shows_sample(client):
+    page = client.get("/")
+    assert 'src="/static/sample.jpg"' in page.text
+    assert client.get("/static/sample.jpg").status_code == 200

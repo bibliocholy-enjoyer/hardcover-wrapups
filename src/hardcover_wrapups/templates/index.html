@@ -2,21 +2,20 @@
 {% block content %}
 {% if message %}<p class="notice">{{ message }}</p>{% endif %}
 <section class="hero">
-  <h1>Your month in books, in one image</h1>
-  <p>Sign in with your <a href="https://hardcover.app">Hardcover</a> account, pick a month and a style,
-     and download a collage of the covers of every book you finished. Post it wherever you like.</p>
+  <h1>Create a monthly wrap-up</h1>
+  <p>Sign in with your <a href="https://hardcover.app">Hardcover</a> account, pick a month,
+     and download a collage of the books you've read. Five styles are available,
+     including the seasonal style below. Collect them all!
+    </p>
   {% if session %}
   <a class="button" href="/wrapup">Make a wrap-up</a>
   {% else %}
   <a class="button" href="/login">Sign in with Hardcover</a>
   {% endif %}
 </section>
-<section class="details">
-  <h2>What happens when you sign in</h2>
-  <ul>
-    <li>Hardcover asks you to let this site read your profile and your public and followers-only books.</li>
-    <li>Books you've marked private are never read.</li>
-    <li>The image is drawn on the spot and sent straight to you. Nothing is saved, and your sign-in is forgotten after 15 minutes or when you sign out.</li>
-  </ul>
-</section>
+<figure class="sample">
+  <img src="/static/sample.jpg" width="900" height="783"
+       alt="Example wrap-up: eight book covers under the title “October 2026 Reads”, framed by autumn leaves">
+  <figcaption>These books are made up so I don't get sued!</figcaption>
+</figure>
 {% endblock %}

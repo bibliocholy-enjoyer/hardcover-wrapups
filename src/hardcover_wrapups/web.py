@@ -38,22 +38,28 @@ HERE = Path(__file__).parent
 # Same order as render.STYLES; kept here so the form doesn't have to import Pillow.
 STYLE_CHOICES = [
     ("grid", "Grid", "Covers in neat columns"),
-    ("seasonal", "Seasonal", "The grid, with a border for the season"),
-    ("shelf", "Shelf", "Covers standing on a wooden bookshelf"),
-    ("cork", "Corkboard", "Covers pinned to a corkboard"),
-    ("calendar", "Calendar", "Covers on the days you read them"),
+    ("seasonal", "Seasonal", "The grid, with a snazzy seasonal border"),
+    ("shelf", "Shelf", "Covers standing on a \"wooden\" bookshelf"),
+    ("cork", "Corkboard", "Covers pinned to a stylish corkboard"),
+    ("calendar", "Calendar", "It is what it sounds like"),
 ]
 DEFAULT_STYLE = "grid"
 
-# Seasonal themes; "auto" picks the month's season (northern hemisphere).
+# Seasonal themes; the form starts on the month's season.
 THEME_CHOICES = [
-    ("auto", "Automatic (from the month)"),
     ("autumn", "Autumn leaves"),
     ("winter", "Snowflakes"),
     ("spring", "Spring blossoms"),
     ("summer", "Summer flowers and citrus"),
 ]
 DEFAULT_COLUMNS = 4
+
+
+def season_for_month(month):
+    """Same as seasonal.theme_for_month (northern hemisphere), without importing Pillow."""
+    return {12: "winter", 1: "winter", 2: "winter", 3: "spring", 4: "spring", 5: "spring",
+            6: "summer", 7: "summer", 8: "summer"}.get(month, "autumn")
+
 MAX_COLUMNS = 8
 MAX_NAME_LENGTH = 40
 
@@ -71,7 +77,7 @@ MAX_BOOKS = 60
 
 MESSAGES = {
     "expired": "Your session ended. Sign in again to make another wrap-up.",
-    "signed_out": "You're signed out. Nothing about your library was kept.",
+    "signed_out": "You're signed out.",
     "cancelled": "Sign-in was cancelled.",
 }
 
@@ -123,7 +129,7 @@ class Options:
     columns: int | None = None
     name: str = ""
     include_followers: bool = False
-    theme: str = "auto"
+    theme: str | None = None  # None means the month's season
 
     @property
     def max_privacy(self):
@@ -132,6 +138,10 @@ class Options:
     @property
     def filename(self):
         return f"wrapup-{self.year}-{self.month:02d}-{self.style}.png"
+
+    @property
+    def season(self):
+        return self.theme or season_for_month(self.month)
 
     @property
     def month_label(self):
@@ -166,10 +176,10 @@ def parse_options(form, today):
     if style not in {key for key, _, _ in STYLE_CHOICES}:
         errors.append("Pick one of the styles.")
         style = DEFAULT_STYLE
-    theme = form.get("theme", "auto")
-    if theme not in {key for key, _ in THEME_CHOICES}:
+    theme = form.get("theme") or None
+    if theme and theme not in {key for key, _ in THEME_CHOICES}:
         errors.append("Pick one of the seasons.")
-        theme = "auto"
+        theme = None
     columns = None
     if form.get("columns", "").strip():
         columns = number("columns", 1, MAX_COLUMNS, "Books per row")
@@ -193,7 +203,7 @@ def build_png(books, covers, options):
     out = io.BytesIO()
     render.render_style(options.style, books, title, out, options.year, options.month,
                         columns=options.columns,
-                        theme=None if options.theme == "auto" else options.theme)
+                        theme=options.season)
     return out.getvalue()
 
 
@@ -260,7 +270,8 @@ def create_app(settings, transport=None, today=date.today):
 
     def form_page(request, session, options, status=200, **context):
         return page(request, "wrapup.html", status=status, session=session, options=options,
-                    styles=STYLE_CHOICES, themes=THEME_CHOICES, months=list(enumerate(calendar.month_name))[1:],
+                    styles=STYLE_CHOICES, themes=THEME_CHOICES,
+                    months=[(n, calendar.month_name[n], season_for_month(n)) for n in range(1, 13)],
                     this_year=today().year, default_columns=DEFAULT_COLUMNS, max_columns=MAX_COLUMNS,
                     max_name_length=MAX_NAME_LENGTH, **context)
 
@@ -367,6 +378,12 @@ def create_app(settings, transport=None, today=date.today):
                                                  session["token"], "access_token")
         return response
 
+    async def privacy(request):
+        return page(request, "privacy.html", session=get_session(request))
+
+    async def terms(request):  # the terms now share a page with the privacy policy
+        return RedirectResponse("/privacy", status_code=301)
+
     async def healthz(request):
         return PlainTextResponse("ok")
 
@@ -382,6 +399,8 @@ def create_app(settings, transport=None, today=date.today):
             Route("/wrapup", wrapup),
             Route("/wrapup", make_wrapup, methods=["POST"]),
             Route("/logout", logout, methods=["POST"]),
+            Route("/privacy", privacy),
+            Route("/terms", terms),
             Route("/healthz", healthz),
             Route("/favicon.ico", favicon),
             Mount("/static", StaticFiles(directory=HERE / "static"), name="static"),
