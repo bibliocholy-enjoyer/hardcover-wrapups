@@ -10,6 +10,7 @@ dist/
 # Local config and secrets
 .env
 .env.*
+!.env.example
 
 # Rendered wrap-ups
 wrapup-*.png
