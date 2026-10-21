@@ -341,8 +341,19 @@ def test_pages_link_assets_with_relative_paths(client):
     # request would say http:// and the browser would block them on the https page.
     sign_in(client)
     for page in (client.get("/"), client.get("/wrapup")):
-        assert "http://testserver" not in page.text
+        assert 'href="http://testserver' not in page.text
+        assert 'src="http://testserver' not in page.text
         assert 'href="/static/style.css"' in page.text
+
+
+def test_link_previews_show_the_icon(client):
+    # Link previews need full URLs; they come from BASE_URL, not the request, so they stay https.
+    page = client.get("/privacy").text
+    assert f'<meta property="og:image" content="{SETTINGS.base_url}/static/icon-512.png">' in page
+    assert f'<meta property="og:url" content="{SETTINGS.base_url}/privacy">' in page
+    assert '<meta property="og:title" content="Privacy and Terms · Hardcover Wrap-Ups">' in page
+    assert '<meta name="twitter:card" content="summary">' in page
+    assert client.get("/static/icon-512.png").status_code == 200
 
 
 def test_policy_page(client):
