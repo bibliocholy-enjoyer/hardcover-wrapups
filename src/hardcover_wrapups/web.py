@@ -239,6 +239,7 @@ class SecurityHeadersAndLogging:
 def create_app(settings, transport=None, today=date.today):
     """The Starlette app. `transport` and `today` let tests fake Hardcover and the date."""
     templates = Jinja2Templates(directory=HERE / "templates")
+    templates.env.globals["base_url"] = settings.base_url  # link previews need full URLs
     sealer = Sealer(settings.session_secret)
     render_slots = asyncio.Semaphore(MAX_CONCURRENT_RENDERS)
 

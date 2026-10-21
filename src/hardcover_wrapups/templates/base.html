@@ -4,7 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Hardcover Wrap-Ups{% endblock %}</title>
-  <meta name="description" content="Make a cover-collage image of the books you finished this month, from your Hardcover library.">
+  {% set description = "Make a cover-collage image of the books you finished this month, from your Hardcover library." %}
+  <meta name="description" content="{{ description }}">
+  {# Link previews (Discord, Slack, iMessage…): a small icon card, not a large image #}
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{{ self.title() }}">
+  <meta property="og:description" content="{{ description }}">
+  <meta property="og:url" content="{{ base_url }}{{ request.url.path }}">
+  <meta property="og:image" content="{{ base_url }}/static/icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="Hardcover Wrap-Ups icon: a calendar page full of books">
+  <meta name="twitter:card" content="summary">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
   <link rel="icon" href="/static/icon-192.png" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
