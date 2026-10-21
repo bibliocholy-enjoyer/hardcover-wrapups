@@ -341,12 +341,17 @@ def test_pages_link_assets_with_relative_paths(client):
         assert 'href="/static/style.css"' in page.text
 
 
-@pytest.mark.parametrize("path, heading", [("/privacy", "Privacy policy"), ("/terms", "Terms of use")])
-def test_policy_pages(client, path, heading):
-    resp = client.get(path)
+def test_policy_page(client):
+    resp = client.get("/privacy")
     assert resp.status_code == 200
-    assert f"<h1>{heading}</h1>" in resp.text
+    assert "<h1>Privacy Policy and Terms of Use</h1>" in resp.text
     assert 'href="/privacy"' in client.get("/").text
+
+
+def test_terms_redirects_to_policy_page(client):
+    resp = client.get("/terms", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["location"] == "/privacy"
 
 
 def test_landing_page_shows_sample(client):

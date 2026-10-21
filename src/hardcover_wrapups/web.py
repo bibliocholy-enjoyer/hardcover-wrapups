@@ -38,10 +38,10 @@ HERE = Path(__file__).parent
 # Same order as render.STYLES; kept here so the form doesn't have to import Pillow.
 STYLE_CHOICES = [
     ("grid", "Grid", "Covers in neat columns"),
-    ("seasonal", "Seasonal", "The grid, with a border for the season"),
-    ("shelf", "Shelf", "Covers standing on a wooden bookshelf"),
-    ("cork", "Corkboard", "Covers pinned to a corkboard"),
-    ("calendar", "Calendar", "Covers on the days you read them"),
+    ("seasonal", "Seasonal", "The grid, with a snazzy seasonal border"),
+    ("shelf", "Shelf", "Covers standing on a \"wooden\" bookshelf"),
+    ("cork", "Corkboard", "Covers pinned to a stylish corkboard"),
+    ("calendar", "Calendar", "It is what it sounds like"),
 ]
 DEFAULT_STYLE = "grid"
 
@@ -71,7 +71,7 @@ MAX_BOOKS = 60
 
 MESSAGES = {
     "expired": "Your session ended. Sign in again to make another wrap-up.",
-    "signed_out": "You're signed out. Nothing about your library was kept.",
+    "signed_out": "You're signed out.",
     "cancelled": "Sign-in was cancelled.",
 }
 
@@ -370,8 +370,8 @@ def create_app(settings, transport=None, today=date.today):
     async def privacy(request):
         return page(request, "privacy.html", session=get_session(request))
 
-    async def terms(request):
-        return page(request, "terms.html", session=get_session(request))
+    async def terms(request):  # the terms now share a page with the privacy policy
+        return RedirectResponse("/privacy", status_code=301)
 
     async def healthz(request):
         return PlainTextResponse("ok")
