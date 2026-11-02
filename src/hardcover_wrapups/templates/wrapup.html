@@ -8,7 +8,7 @@
      {% else %}{{ book_count }} book{{ "" if book_count == 1 else "s" }}.{% endif %}
      This image isn't saved anywhere, so download it now.</p>
   <img src="{{ image }}" alt="Collage of the covers of the books you finished in {{ options.month_label }}">
-  <a class="button" href="{{ image }}" download="{{ options.filename }}">Download image</a>
+  <a class="button" href="{{ image }}" download="{{ options.filename }}" data-count-download>Download image</a>
 </section>
 <h2>Try another style</h2>
 {% else %}

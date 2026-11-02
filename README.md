@@ -65,10 +65,21 @@ Code lives in `src/hardcover_wrapups/`: `api.py` talks to Hardcover's GraphQL AP
 `render.py` draws the collages, `cli.py` is the command-line tool, and `web.py`,
 `oauth.py` and `session.py` are the web app.
 
+## Usage stats
+
+The web app keeps anonymous daily counts in a SQLite file on a Fly volume: home page
+visits, sign-ins, wrap-ups by style, and downloads, plus each month's number of unique
+makers. `STATS_EXCLUDE_USERS` (comma-separated Hardcover usernames) leaves people out.
+See [stats.py](src/hardcover_wrapups/stats.py). The machine has to be awake to show them:
+
+```sh
+curl -s https://hardcover-wrapups.fly.dev/healthz && fly ssh console -C hc-wrapup-stats
+```
+
 ## Privacy
 
-The app is designed to be stateless: it reads your Hardcover library for one request
-to draw the image and stores nothing.
+The app reads your Hardcover library for one request to draw the image and doesn't
+store your books or images. It only keeps the anonymous usage counts described above.
 
 ## License
 

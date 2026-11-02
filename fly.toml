@@ -7,7 +7,14 @@ primary_region = "iad"  # next to Hardcover's API (DigitalOcean, New York area)
 
 [env]
   BASE_URL = "https://hardcover-wrapups.fly.dev"
-  # HARDCOVER_CLIENT_ID, HARDCOVER_CLIENT_SECRET and SESSION_SECRET are set with `fly secrets set`.
+  STATS_DB = "/data/stats.db"
+  # HARDCOVER_CLIENT_ID, HARDCOVER_CLIENT_SECRET, SESSION_SECRET and STATS_EXCLUDE_USERS
+  # are set with `fly secrets set`.
+
+# Anonymous usage counts live here (see stats.py).
+[mounts]
+  source = "stats"
+  destination = "/data"
 
 [http_service]
   internal_port = 8080

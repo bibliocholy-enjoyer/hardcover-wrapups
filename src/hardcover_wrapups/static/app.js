@@ -41,3 +41,9 @@ document.querySelectorAll("form [data-styles]").forEach((field) => {
   form.addEventListener("change", update);
   update();
 });
+
+// The image is already in the page, so the server can't see a download; tell it here.
+// This sends nothing but the fact that the button was clicked.
+document.querySelectorAll("[data-count-download]").forEach((link) => {
+  link.addEventListener("click", () => navigator.sendBeacon("/downloaded"));
+});
