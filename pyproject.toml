@@ -19,6 +19,7 @@ dependencies = [
 [project.scripts]
 hc-wrapup = "hardcover_wrapups.cli:main"
 hc-wrapup-web = "hardcover_wrapups.web:serve"
+hc-wrapup-stats = "hardcover_wrapups.stats:main"
 
 [dependency-groups]
 dev = [

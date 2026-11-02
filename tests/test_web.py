@@ -1,9 +1,12 @@
 import base64
+import contextlib
 import hashlib
 import io
 import json
+import sqlite3
 import subprocess
 import sys
+from dataclasses import replace
 from datetime import date
 from urllib.parse import parse_qs, urlsplit
 
@@ -373,3 +376,69 @@ def test_landing_page_shows_sample(client):
     page = client.get("/")
     assert 'src="/static/sample.jpg"' in page.text
     assert client.get("/static/sample.jpg").status_code == 200
+
+
+@pytest.fixture
+def stats_db(tmp_path):
+    return tmp_path / "stats.db"
+
+
+@pytest.fixture
+def counted(hardcover, stats_db):
+    settings = replace(SETTINGS, stats_db=str(stats_db))
+    app = web.create_app(settings, transport=httpx.MockTransport(hardcover), today=lambda: TODAY)
+    with TestClient(app, follow_redirects=False) as c:
+        yield c
+
+
+def counts(path):
+    with contextlib.closing(sqlite3.connect(path)) as db:
+        return dict(db.execute("SELECT event, count FROM daily_counts"))
+
+
+def test_usage_is_counted(counted, stats_db):
+    counted.get("/")
+    sign_in(counted)
+    make_wrapup(counted)
+    make_wrapup(counted, style="shelf")
+    assert counted.post("/downloaded").status_code == 204
+    assert counts(stats_db) == {"visit": 1, "sign_in": 1, "wrapup:grid": 1, "wrapup:shelf": 1,
+                                "download": 1}
+    with contextlib.closing(sqlite3.connect(stats_db)) as db:
+        assert db.execute("SELECT COUNT(*) FROM month_makers").fetchone() == (1,)
+
+
+def test_excluded_user_is_not_counted(hardcover, stats_db):
+    settings = replace(SETTINGS, stats_db=str(stats_db), stats_exclude=frozenset({"sam"}))
+    app = web.create_app(settings, transport=httpx.MockTransport(hardcover), today=lambda: TODAY)
+    with TestClient(app, follow_redirects=False) as c:
+        sign_in(c)
+        c.get("/")
+        make_wrapup(c)
+        c.post("/downloaded")
+    assert counts(stats_db) == {}
+
+
+def test_redirects_and_bots_are_not_visits(counted, stats_db):
+    counted.get("/?signed_out=1")
+    counted.get("/", headers={"user-agent": "Mozilla/5.0 (compatible; Discordbot/2.0)"})
+    assert counts(stats_db) == {}
+
+
+def test_empty_month_is_not_a_wrapup(counted, hardcover, stats_db):
+    hardcover.rows = []
+    sign_in(counted)
+    make_wrapup(counted)
+    assert counts(stats_db) == {"sign_in": 1}
+
+
+def test_download_without_a_session_is_not_counted(counted, stats_db):
+    assert counted.post("/downloaded").status_code == 204
+    assert counts(stats_db) == {}
+
+
+def test_stats_failure_does_not_break_the_site(hardcover, tmp_path):
+    settings = replace(SETTINGS, stats_db=str(tmp_path / "missing" / "stats.db"))
+    app = web.create_app(settings, transport=httpx.MockTransport(hardcover), today=lambda: TODAY)
+    with TestClient(app, follow_redirects=False) as c:
+        assert c.get("/").status_code == 200

@@ -1,7 +1,8 @@
 """The web app: sign in with Hardcover, pick a month and a style, download the image.
 
-Stateless: the access token lives only in an encrypted cookie for SESSION_MAX_AGE,
-and rendered images go straight back to the browser without being stored.
+The access token lives only in an encrypted cookie for SESSION_MAX_AGE, and rendered
+images go straight back to the browser without being stored. The only thing kept on
+the server is anonymous usage counts (see stats.py).
 
 Run locally with `uv run --env-file .env hc-wrapup-web`.
 """
@@ -12,6 +13,7 @@ import contextlib
 import io
 import logging
 import os
+import re
 import secrets
 import time
 from dataclasses import dataclass
@@ -23,12 +25,12 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import MutableHeaders
 from starlette.middleware import Middleware
-from starlette.responses import FileResponse, PlainTextResponse, RedirectResponse
+from starlette.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
-from . import api, oauth
+from . import api, oauth, stats
 from .session import Sealer
 
 log = logging.getLogger(__name__)
@@ -81,6 +83,9 @@ MESSAGES = {
     "cancelled": "Sign-in was cancelled.",
 }
 
+# Link previews and crawlers fetch the home page too; they aren't visits.
+BOT_USER_AGENT = re.compile(r"bot|crawl|spider|preview|facebookexternalhit", re.IGNORECASE)
+
 SECURITY_HEADERS = {
     "content-security-policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; "
                                "script-src 'self'; form-action 'self'; frame-ancestors 'none'; "
@@ -99,6 +104,8 @@ class Settings:
     client_secret: str
     session_secret: str
     base_url: str = "http://127.0.0.1:8080"
+    stats_db: str | None = None  # None means no usage counts
+    stats_exclude: frozenset[str] = frozenset()  # lowercase Hardcover usernames
 
     @classmethod
     def from_env(cls):
@@ -110,6 +117,10 @@ class Settings:
         values = {field: os.environ[env] for field, env in names.items()}
         if os.environ.get("BASE_URL"):
             values["base_url"] = os.environ["BASE_URL"].rstrip("/")
+        values["stats_db"] = os.environ.get("STATS_DB") or None
+        values["stats_exclude"] = frozenset(
+            name.strip().lower() for name in os.environ.get("STATS_EXCLUDE_USERS", "").split(",")
+            if name.strip())
         return cls(**values)
 
     @property
@@ -242,6 +253,7 @@ def create_app(settings, transport=None, today=date.today):
     templates.env.globals["base_url"] = settings.base_url  # link previews need full URLs
     sealer = Sealer(settings.session_secret)
     render_slots = asyncio.Semaphore(MAX_CONCURRENT_RENDERS)
+    usage = stats.Stats(settings.stats_db, settings.stats_exclude, today)
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
@@ -278,7 +290,11 @@ def create_app(settings, transport=None, today=date.today):
 
     async def index(request):
         message = next((text for key, text in MESSAGES.items() if key in request.query_params), None)
-        return page(request, "index.html", session=get_session(request), message=message)
+        session = get_session(request)
+        if (request.method == "GET" and not request.query_params
+                and not BOT_USER_AGENT.search(request.headers.get("user-agent", ""))):
+            usage.count(stats.VISIT, session and session.get("username"))
+        return page(request, "index.html", session=session, message=message)
 
     async def login(request):
         state, verifier = oauth.new_state(), oauth.new_code_verifier()
@@ -327,6 +343,7 @@ def create_app(settings, transport=None, today=date.today):
             "csrf": secrets.token_urlsafe(32),
         }, SESSION_MAX_AGE)
         response.delete_cookie(LOGIN_COOKIE)
+        usage.count(stats.SIGN_IN, me.get("username"))
         return response
 
     async def wrapup(request):
@@ -366,9 +383,16 @@ def create_app(settings, transport=None, today=date.today):
             log.exception("building a wrap-up failed")
             return error_page(request, "Couldn't get your books from Hardcover. "
                                        "Please try again in a minute.", 502)
+        usage.count_wrapup(options.style, session.get("username"))
         image = "data:image/png;base64," + base64.b64encode(png).decode()
         return form_page(request, session, options, image=image, book_count=len(books),
                          total_books=total)
+
+    async def downloaded(request):  # the image is already in the page, so app.js reports this
+        session = get_session(request)
+        if session:
+            usage.count(stats.DOWNLOAD, session.get("username"))
+        return Response(status_code=204)
 
     async def logout(request):
         session = get_session(request)
@@ -399,6 +423,7 @@ def create_app(settings, transport=None, today=date.today):
             Route("/callback", callback),
             Route("/wrapup", wrapup),
             Route("/wrapup", make_wrapup, methods=["POST"]),
+            Route("/downloaded", downloaded, methods=["POST"]),
             Route("/logout", logout, methods=["POST"]),
             Route("/privacy", privacy),
             Route("/terms", terms),
