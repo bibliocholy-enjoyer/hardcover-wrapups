@@ -88,6 +88,12 @@ class Stats:
         self._write(change)
 
 
+def excluded_users():
+    """The lowercase usernames in STATS_EXCLUDE_USERS, which is separated by commas."""
+    names = os.environ.get("STATS_EXCLUDE_USERS", "").split(",")
+    return frozenset(name.strip().lower() for name in names if name.strip())
+
+
 def month_of(day):
     return day.isoformat()[:7]
 
@@ -120,7 +126,7 @@ def read_rows(db):
     return dict(sorted(months.items()))
 
 
-def report(db, today, style_labels):
+def report(db, today, style_labels, excluded=frozenset()):
     """The usage report as text. style_labels maps a style's key to its name."""
     months = read_rows(db)
     lines = ["Hardcover Wrap-Ups usage", ""]
@@ -152,6 +158,10 @@ def report(db, today, style_labels):
                    GROUP BY day ORDER BY 2 DESC, 1 LIMIT ?""",
                 (month, WRAPUP_PREFIX + "%", BUSIEST_DAYS)):
             lines.append(f"  {day}{count:>5} wrap-up{'' if count == 1 else 's'}")
+    if excluded:
+        lines += ["", f"Left out: {', '.join(sorted(excluded))}",
+                  "  Not counted: sign-ins, unique makers, wrap-ups, downloads, and visits while signed in",
+                  "  Still counted: home page visits while signed out"]
     return "\n".join(lines)
 
 
@@ -164,6 +174,7 @@ def main():
         raise SystemExit(f"No usage stats yet ({path} doesn't exist).")
     db = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
     try:
-        print(report(db, date.today(), {key: label for key, label, _ in STYLE_CHOICES}))
+        print(report(db, date.today(), {key: label for key, label, _ in STYLE_CHOICES},
+                     excluded_users()))
     finally:
         db.close()

@@ -118,9 +118,7 @@ class Settings:
         if os.environ.get("BASE_URL"):
             values["base_url"] = os.environ["BASE_URL"].rstrip("/")
         values["stats_db"] = os.environ.get("STATS_DB") or None
-        values["stats_exclude"] = frozenset(
-            name.strip().lower() for name in os.environ.get("STATS_EXCLUDE_USERS", "").split(",")
-            if name.strip())
+        values["stats_exclude"] = stats.excluded_users()
         return cls(**values)
 
     @property
@@ -341,6 +339,7 @@ def create_app(settings, transport=None, today=date.today):
             "token": tokens["access_token"],
             "username": me.get("username"),
             "csrf": secrets.token_urlsafe(32),
+            "signed_in": time.time(),
         }, SESSION_MAX_AGE)
         response.delete_cookie(LOGIN_COOKIE)
         usage.count(stats.SIGN_IN, me.get("username"))
@@ -377,7 +376,10 @@ def create_app(settings, transport=None, today=date.today):
                 books = books[:MAX_BOOKS]
                 covers = await api.download_covers(client, [b["url"] for b in books])
                 png = await run_in_threadpool(build_png, books, covers, options)
-        except api.AuthError:
+        except api.AuthError as e:
+            # Sessions last SESSION_MAX_AGE, so this is Hardcover ending one early.
+            log.warning("token rejected %.0fs after sign-in: %s",
+                        time.time() - session.get("signed_in", 0), e)
             return signed_out("expired")
         except api.HardcoverError:
             log.exception("building a wrap-up failed")
