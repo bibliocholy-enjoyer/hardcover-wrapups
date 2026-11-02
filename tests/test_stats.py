@@ -116,3 +116,21 @@ def test_main_prints_the_report(usage, monkeypatch, capsys):
     monkeypatch.setenv("STATS_DB", usage.path)
     stats.main()
     assert "Hardcover Wrap-Ups usage" in capsys.readouterr().out
+
+
+def test_main_reminds_who_is_left_out(usage, monkeypatch, capsys):
+    usage.count(stats.VISIT)
+    monkeypatch.setenv("STATS_DB", usage.path)
+    monkeypatch.setenv("STATS_EXCLUDE_USERS", " Me, alex ")
+    stats.main()
+    out = capsys.readouterr().out
+    assert "Left out: alex, me\n" in out
+    assert "Still counted: home page visits while signed out" in out
+
+
+def test_no_reminder_without_exclusions(usage, monkeypatch, capsys):
+    usage.count(stats.VISIT)
+    monkeypatch.setenv("STATS_DB", usage.path)
+    monkeypatch.delenv("STATS_EXCLUDE_USERS", raising=False)
+    stats.main()
+    assert "Left out" not in capsys.readouterr().out

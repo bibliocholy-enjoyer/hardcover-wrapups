@@ -242,6 +242,14 @@ def test_rejected_token_signs_out(client, hardcover):
     assert web.SESSION_COOKIE not in client.cookies
 
 
+def test_rejected_token_is_logged(client, hardcover, caplog):
+    sign_in(client)
+    hardcover.valid_token = "hc_at_other"
+    with caplog.at_level("WARNING", logger="hardcover_wrapups.web"):
+        make_wrapup(client)
+    assert "token rejected 0s after sign-in" in caplog.text
+
+
 def test_sign_out_revokes_access_token(client, hardcover):
     sign_in(client)
     resp = client.post("/logout", data={"csrf": csrf(client)})
